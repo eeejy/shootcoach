@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shootcoach"
+version = "0.1.0"
+description = "취향저격 — 표적지·자세 융합 AI 사격 교정 MVP"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "opencv-contrib-python",
+  "pyyaml",
+  "pandas",
+  "requests",
+  "pillow",
+]
+
+[project.optional-dependencies]
+ml = ["ultralytics"]
+app = ["streamlit"]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["shootcoach*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

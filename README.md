@@ -1,0 +1,97 @@
+# 🎯 취향저격 — 표적지·자세 융합 AI 사격 교정 (MVP)
+
+> 2026 해양경찰청 AI 해커톤 · 팀 **취향저격**
+> **표적지 사진 한 장**으로 채점하고 원인 후보와 교정 가이드를 준다(1단계). **자세 영상**을 더하면 후보 중 하나를 확정한다(2단계).
+> 모든 처리는 **이 PC 안에서만** 돌아간다. 외장 GPU가 없는 MacBook Air(M4)에서 전체 파이프라인을 확인했다.
+
+```
+표적지 사진 ─▶ 마커 정면 보정 ─▶ 탄공 검출(YOLO) ─▶ 채점·탄착군 ─▶ 1단계: 원인 후보 + 교정 가이드
+                                                                        │
+자세 영상 ──▶ 관절 17개 ──▶ 격발 시점 ──▶ 격발 전후 움직임 ─────────────▶ 2단계: 확정 / 배제 / 관측 불가
+                                                                        │
+                                                        로컬 LLM(검증 가드) ─▶ 사수용 설명 문장
+```
+
+## 왜 이렇게 만들었나
+
+- **탄착점 인식은 이미 풀린 문제다.** 합참도 2021년에 발주했다. 우리는 그다음 단계인 **"왜 빗나갔나"와 "어떻게 고치나"**를 다룬다.
+- **표적지만으로는 원인이 여러 개로 남는다.** 예를 들어 오른손잡이가 왼쪽 아래로 몰리면 저킹·총기 기울임·방아쇠 밀기가 모두 후보다. 교관이 사수를 옆에서 지켜보듯, 카메라로 **격발 직전 총구가 꺼지는지** 확인해 하나로 좁힌다.
+- **판정은 규칙 엔진이 한다.** 규칙은 교범 3종(FM 3-23.35, USAMU, TargetShooting Canada)이 근거이고, 교관이 CSV로 직접 고칠 수 있다. 언어 모델은 결과를 사람 말로 옮기기만 하고, 검증을 통과하지 못하면 템플릿 문장으로 대체된다.
+- **모르면 모른다고 한다.** 측면 영상으로 볼 수 없는 원인(총기 기울임, 시선 등)은 "관측 불가", 근거가 없으면 "보류"로 표시한다.
+
+## 결과 (합성 검증 데이터 · 이 맥북에서 측정)
+
+<!-- RESULTS -->
+
+> ⚠️ 수치는 **학습에 쓰지 않은 합성 데이터** 기준이다. 실제 해경 표적지·자세 영상에서의 성능은 아직 측정하지 않았다. 실제 영상에서 확인한 한계는 [리서치 기록](docs/research_log.md) §3에 정리했다.
+
+## 빠른 시작
+
+```bash
+# 1) 환경 (Python 3.12 권장)
+uv venv --python 3.12 .venv && source .venv/bin/activate
+uv pip install -e ".[ml,app,dev]"
+
+# 2) 웹앱 (같은 와이파이의 폰에서 http://<PC IP>:8501 로 접속 → 사진 업로드)
+streamlit run app/streamlit_app.py
+
+# 3) CLI
+python scripts/analyze.py samples/demo_jerking_low_left.jpg --distance 15 --click-mm-per-10m 5
+python scripts/analyze.py samples/demo_jerking_low_left.jpg --video my_side_view.mp4 --vlm
+
+# 4) 테스트
+pytest -q
+```
+
+**설명 문장(선택):** [Ollama](https://ollama.com) 설치 후 `ollama pull qwen3:8b`(권장) 또는 `ollama pull qwen2.5vl:3b`. 없으면 템플릿 문장을 쓴다.
+
+## 실제 사격장에서 쓰는 법
+
+1. **표적지:** `samples/a4_practice_target.pdf`를 **100% 배율**로 인쇄한다. 기존 해경 표적지를 쓸 때는 같은 ArUco 마커 4장을 스티커로 네 모서리에 붙이고, 마커 중심 위치(mm)를 재서 `configs/target_a4.yaml`을 복사해 새 설정 파일을 만든다.
+2. **촬영:** 네 모서리 마커가 모두 보이게 찍는다. 기울어져도 된다. 겹친 탄공이 걱정되면 5발마다 찍는다(`shootcoach/target/sequence.py`).
+3. **자세 영상:** 사수 **측면 2m, 높이 1.2m**에 삼각대를 두고 **편집 없이 연속 촬영**한다. 전신이 보여야 하고, 가능하면 240fps 슬로모션으로 찍는다. 총성이 녹음되면 격발 시점이 더 정확하다. 좌우 흔들림까지 보려면 후방 영상을 추가한다.
+4. **규칙 조정:** `rules/stage1_rules.csv`(위치·모양 → 원인 가중치), `rules/causes.csv`(교정 문구·훈련), `rules/posture_signals.csv`(자세 신호 임계값). 코드는 고칠 필요 없다.
+
+## 실제 데이터로 넘어가기 (Day 1)
+
+```bash
+# Roboflow 공개 탄공 데이터 (API 키 필요: https://app.roboflow.com → Settings → API)
+pip install roboflow
+python - <<'PY'
+from roboflow import Roboflow
+rf = Roboflow(api_key="YOUR_KEY")
+rf.workspace("project-bat-bullet-hole-detection").project("bullet-hole-object-detection").version(1).download("yolov8", location="data/roboflow_bh")  # 버전 번호는 데이터셋 페이지에서 확인
+PY
+# 공개 데이터는 클라우드(Kaggle)에서 학습해도 된다. 해경 데이터는 반드시 이 PC에서만:
+python scripts/train_detector.py --data data/haegyeong/data.yaml --model models/hole_detector.pt --epochs 20
+```
+
+## 폴더
+
+| 경로 | 내용 |
+|---|---|
+| `shootcoach/` | 파이프라인 코드 (구조: [docs/architecture.md](docs/architecture.md)) |
+| `rules/` | **교관이 수정하는 규칙표** · 근거: [docs/rule_sources.md](docs/rule_sources.md) |
+| `app/streamlit_app.py` | 로컬 웹앱 |
+| `scripts/` | 표적지 생성, 합성 데이터, 학습, 평가, 벤치마크, CLI |
+| `models/hole_detector.pt` | 탄공 검출 모델 (YOLO11n, 합성 데이터 학습) |
+| `samples/` | 인쇄용 표적지, 시나리오별 데모 사진(합성) |
+| `docs/` | 설계, 리서치 기록, 평가 결과, 벤치마크 |
+| `tests/` | 단위·시나리오 테스트 |
+
+## 한계와 다음 단계
+
+| 한계 | 다음 단계 |
+|---|---|
+| 탄공 검출기가 **합성 데이터로만** 학습됨. 실제 실루엣 표적에서 선 끝 오검출 확인 (v2에서 완화) | 해경 표적지 50~100장 라벨링 → 맥 로컬 파인튜닝 |
+| 2단계 신호 임계값은 **합성 자세 데이터**로만 검증 | 교관 판정이 붙은 실제 영상 10~20건으로 임계값 재조정 |
+| 측면 영상은 좌우 흔들림·총기 기울임을 못 봄 | 후방 카메라 추가 (신호 정의는 이미 있음: `views=rear`) |
+| 규칙 가중치(`prior`)는 자료 기반 초기값 | 교관 판정 데이터로 보정, 사수별 캘리브레이션 |
+| K5 등 조준기 1클릭 값이 미정 | 기종별 값 입력 시 클릭 수 자동 계산 (구현됨) |
+
+## 라이선스·데이터 고지
+
+- 탄공 검출·관절 추출에 **Ultralytics YOLO (AGPL-3.0)**를 쓴다. 외부에 서비스로 배포하려면 AGPL 조건을 따르거나 상용 라이선스를 받아야 한다. 해커톤 이후 정식 도입 단계에서 검토한다.
+- `docs/img/*_pd.jpg`는 미 해병대·미 육군 영상(퍼블릭 도메인, Wikimedia Commons)에서 만든 파생 이미지다. 원본 영상은 저장소에 넣지 않았다.
+- 교범 PDF 원문은 저장소에 넣지 않았다. 링크는 [docs/rule_sources.md](docs/rule_sources.md)에 있다.
+- 데모 사진은 모두 합성이다. 실제 사람이나 해경 자료는 들어 있지 않다.

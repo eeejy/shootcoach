@@ -1,0 +1,13 @@
+signal_id,name_ko,feature,compare,threshold,views,description_ko
+muzzle_up_preshot,격발 직전 총구 들림,forearm_pitch_delta_deg,gt,1.5,side,격발 직전 0.3초 동안 팔뚝 각도가 기준 대비 위로 올라감 (힐링·반동 예상)
+muzzle_dip_preshot,격발 직전 총구 하강,forearm_pitch_delta_deg,lt,-1.5,side,격발 직전 0.3초 동안 팔뚝 각도가 기준 대비 아래로 내려감 (저킹·반동 예상)
+wrist_dip_preshot,격발 직전 손 하강,wrist_drop_rel,gt,0.012,side;rear,격발 직전 손목 높이가 기준 대비 내려감 (몸통 길이 대비)
+shoulder_tension,격발 직전 어깨 움츠림,shoulder_rise_rel,gt,0.012,side;rear,격발 직전 어깨가 귀 쪽으로 올라감 (긴장)
+lateral_shift_preshot,격발 직전 좌우 흔들림,wrist_lateral_rel,gt,0.015,rear,격발 직전 손목이 좌우로 이동 (후방 영상에서만 측정)
+wrist_unstable,조준 중 손 떨림,wrist_jitter_rel,gt,0.010,side;rear,격발 전 1초 동안 손목 위치의 떨림
+breath_sway,조준 중 상하 흔들림,wrist_vertical_ptp_rel,gt,0.035,side;rear,격발 전 2초 동안 손목의 느린 상하 움직임 폭 (호흡)
+torso_sway,몸통 흔들림,torso_sway_rel,gt,0.025,side;rear,격발 전 2초 동안 어깨 중심점의 흔들림 폭
+arm_sag_preshot,조준 중 팔 처짐,wrist_sag_rel,gt,0.03,side;rear,격발 전 1초 동안 손목이 점점 내려감 (근력 부족)
+elbow_angle_change,격발 직전 팔꿈치 각 변화,elbow_angle_delta_deg,abs_gt,4.0,side,격발 직전 팔꿈치 각도가 기준 대비 변함
+early_drop_post,격발 직후 팔 내림,wrist_drop_post_rel,gt,0.08,side;rear,격발 후 0.35~1초 사이 손목이 크게 내려감 (팔로스루 부족)
+head_lift_post,격발 직후 고개 듦,head_rise_post_rel,gt,0.03,side;rear,격발 후 0.35~1초 사이 머리가 올라감 (결과 확인)

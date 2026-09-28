@@ -13,3 +13,4 @@ research/sources/
 yolo*.pt
 .DS_Store
 *.egg-info/
+profiles/

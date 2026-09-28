@@ -17,7 +17,7 @@
 | Day 2 · 관절 + 격발 검출 | ✅ | 반동 스파이크 + 총성 + 편집 컷 제외 |
 | Day 2 · 자세 특징 + 2단계 엔진 | ✅ (합성 검증) | 실제 영상 임계값 보정 ⏳ |
 | Day 2 · VLM 설명 | ✅ | 검증 가드, qwen3:8b 우선 |
-| Day 2 · 캘리브레이션 세션 | ✅ | `diagnosis/calibration.py`, CLI `--profile` `--calibrate` (웹앱 연결은 ⏳) |
+| Day 2 · 캘리브레이션 세션 | ✅ | `diagnosis/calibration.py`, CLI `--profile` `--calibrate` 웹앱 사이드바 "사수 프로필" |
 | Day 3 · 웹앱 | ✅ | Streamlit, 폰 업로드 |
 | Day 3 · 모바일 촬영 가이드(마커 인식 시 셔터) | ⏳ | HTTPS 필요 (`mkcert`) |
 | Day 3 · 교관 판정 대비 검증 10건 | ⏳ | **실제 데이터가 있어야 가능** |

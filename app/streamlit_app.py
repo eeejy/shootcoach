@@ -18,6 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from shootcoach.config import load_target_spec  # noqa: E402
+from shootcoach.diagnosis.calibration import ShooterProfile, apply_profile  # noqa: E402
+from shootcoach.diagnosis.rules import load_causes  # noqa: E402
+from shootcoach.diagnosis.stage1 import diagnose_stage1  # noqa: E402
+from shootcoach.target.scoring import group_stats  # noqa: E402
 from shootcoach.diagnosis.stage1 import Candidate, Stage1Result, ZeroAdjust  # noqa: E402
 from shootcoach.diagnosis.stage2 import diagnose_stage2  # noqa: E402
 from shootcoach.explain.vlm import template_explanation, vlm_available, vlm_explanation  # noqa: E402
@@ -51,6 +55,7 @@ with st.sidebar:
     click = st.number_input("조준기 1클릭 값 (mm @10m, 모르면 0)", 0.0, 50.0, 0.0, 0.5)
     det_kind = st.selectbox("탄공 검출기", ["auto", "classic"],
                             format_func=lambda x: "딥러닝 (YOLO)" if x == "auto" else "전통 영상처리 (대체)")
+    shooter = st.text_input("사수 프로필 (캘리브레이션, 비우면 사용 안 함)", "")
     use_vlm = st.checkbox("로컬 VLM으로 설명 문장 생성", value=False)
     if use_vlm:
         st.caption("✅ Ollama 연결됨" if vlm_available() else "⚠️ Ollama 미실행 → 템플릿 문장 사용")
@@ -79,7 +84,15 @@ with tab1:
         else:
             try:
                 res = analyze_target(img, SPEC, hand, distance, click or None, detector(det_kind))
+                if shooter.strip():
+                    prof_path = ROOT / "profiles" / f"{shooter.strip()}.json"
+                    if prof_path.exists():
+                        st_ = group_stats(res.holes, SPEC)
+                        s1 = apply_profile(diagnose_stage1(st_, SPEC, hand, distance, click or None), st_,
+                                           ShooterProfile.load(prof_path))
+                        res.report["stage1"] = s1.as_dict()
                 st.session_state["report"] = res.report
+                st.session_state["holes"] = res.holes
                 st.session_state["overlay"] = res.overlay
                 st.session_state.pop("stage2_seq", None)
             except MarkerError as e:
@@ -107,6 +120,17 @@ with tab1:
                 st.caption(f"근거: {', '.join(c['sources'])} · 규칙 {', '.join(c['rule_ids'])}"
                            + (f" · 자세 영상: {c['observable_note']}" if c["observable_note"] else ""))
         st.download_button("리포트 JSON 받기", to_json(rep), "report.json", "application/json")
+        if shooter.strip():
+            with st.expander("🧪 진단 세션으로 기록 (캘리브레이션)"):
+                st.caption("사수가 일부러 특정 오류를 내며 쏜 표적지라면, 그 오류가 이 사수에게서 어느 방향으로 나타나는지 기록합니다.")
+                causes = load_causes()
+                cid = st.selectbox("일부러 낸 오류", sorted(causes), format_func=lambda k: causes[k].cause_ko)
+                if st.button("이 표적지를 기록"):
+                    prof_path = ROOT / "profiles" / f"{shooter.strip()}.json"
+                    prof = ShooterProfile.load(prof_path) if prof_path.exists() else ShooterProfile(shooter.strip(), hand)
+                    prof.add_session(cid, group_stats(st.session_state["holes"], SPEC))
+                    prof.save(prof_path)
+                    st.success(f"기록했습니다 → profiles/{shooter.strip()}.json (이 PC에만 저장)")
 
 with tab2:
     rep = st.session_state.get("report")

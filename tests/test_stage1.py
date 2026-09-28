@@ -41,6 +41,7 @@ def test_score_edge_rule():
     ((22, 22), (13, 13), "scattered_offset", "heeling"),          # 1시 반
     ((0, 0), (4, 22), "vertical_string", "breathing"),
     ((0, 0), (24, 4), "horizontal_string", "natural_point_of_aim"),
+    ((0, 0), (2.5, 11), "vertical_string", "breathing"),          # narrow line, small mean radius
     ((0, 0), (20, 20), "scattered_centered", "fundamentals"),
 ])
 def test_shapes_and_top_cause(offset, sigma, shape, top):

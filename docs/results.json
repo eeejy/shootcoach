@@ -12,7 +12,7 @@
         "loc_err_mm_mean": 0.51,
         "score_exact_acc": 0.982,
         "shape_acc": 0.95,
-        "detect_ms_mean": 33.6
+        "detect_ms_mean": 33.8
       },
       "classic": {
         "precision": 0.745,
@@ -20,8 +20,8 @@
         "f1": 0.735,
         "loc_err_mm_mean": 2.08,
         "score_exact_acc": 0.888,
-        "shape_acc": 0.68,
-        "detect_ms_mean": 242.0
+        "shape_acc": 0.71,
+        "detect_ms_mean": 242.1
       },
       "yolo_v1_synthetic_only_rings": {
         "precision": 0.975,

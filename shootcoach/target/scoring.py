@@ -91,6 +91,7 @@ class ShapeThresholds:
     offset_min_rings: float = 1.0            # centre offset ≥ 1 ring width → offset
     offset_vs_spread: float = 0.9            # … and ≥ 0.9 × mean radius
     string_ratio: float = 2.2                # std ratio for stringing
+    string_min_rings: float = 1.0            # … and long-axis std ≥ 1 ring width
     flier_factor: float = 2.5                # > 2.5 × median distance-to-centroid → flier
     flier_min_rings: float = 3.0             # … and > 3 ring widths from the group
 
@@ -127,9 +128,12 @@ def group_stats(holes: list[Hole], spec: TargetSpec, th: ShapeThresholds | None 
         tight = mean_r <= th.tight_mean_radius_rings * ring_w
         is_offset = offset >= th.offset_min_rings * ring_w and offset >= th.offset_vs_spread * mean_r
         ratio = (sy + 1e-6) / (sx + 1e-6)
-        if not tight and not is_offset and ratio >= th.string_ratio:
+        # Stringing is judged before tightness: a narrow but long line is a breathing/sway
+        # pattern even when its mean radius is small.
+        long_min = th.string_min_rings * ring_w
+        if not is_offset and ratio >= th.string_ratio and sy >= long_min:
             shape = "vertical_string"
-        elif not tight and not is_offset and ratio <= 1 / th.string_ratio:
+        elif not is_offset and ratio <= 1 / th.string_ratio and sx >= long_min:
             shape = "horizontal_string"
         elif tight:
             shape = "tight_offset" if is_offset else "tight_centered"

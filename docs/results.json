@@ -1,0 +1,90 @@
+{
+  "stage1_target": {
+    "n_photos": 200,
+    "rectify_fail": 0,
+    "rectify_ms_mean": 16.9,
+    "reprojection_mm_mean": 0.033,
+    "detectors": {
+      "yolo": {
+        "precision": 0.988,
+        "recall": 0.883,
+        "f1": 0.932,
+        "loc_err_mm_mean": 0.51,
+        "score_exact_acc": 0.982,
+        "shape_acc": 0.95,
+        "detect_ms_mean": 33.6
+      },
+      "classic": {
+        "precision": 0.745,
+        "recall": 0.725,
+        "f1": 0.735,
+        "loc_err_mm_mean": 2.08,
+        "score_exact_acc": 0.888,
+        "shape_acc": 0.68,
+        "detect_ms_mean": 242.0
+      },
+      "yolo_v1_synthetic_only_rings": {
+        "precision": 0.975,
+        "recall": 0.879,
+        "f1": 0.925,
+        "loc_err_mm_mean": 0.58,
+        "score_exact_acc": 0.972,
+        "shape_acc": 0.925,
+        "detect_ms_mean": 33.6
+      }
+    }
+  },
+  "stage2_posture_synthetic": {
+    "jerking+dip": {
+      "stage1_top": "jerking",
+      "expected": "jerking",
+      "accuracy": 1.0
+    },
+    "low-left, clean posture": {
+      "stage1_top": "jerking",
+      "expected": null,
+      "accuracy": 1.0
+    },
+    "heeling+up": {
+      "stage1_top": "heeling",
+      "expected": [
+        "anticipation_high",
+        "heeling"
+      ],
+      "accuracy": 1.0
+    },
+    "low+early drop": {
+      "stage1_top": "anticipation_low",
+      "expected": "follow_through",
+      "accuracy": 1.0
+    },
+    "low+dip": {
+      "stage1_top": "anticipation_low",
+      "expected": "anticipation_low",
+      "accuracy": 1.0
+    },
+    "vertical+breath": {
+      "stage1_top": "breathing",
+      "expected": "breathing",
+      "accuracy": 1.0
+    },
+    "vertical, clean": {
+      "stage1_top": "breathing",
+      "expected": null,
+      "accuracy": 1.0
+    }
+  },
+  "real_target_frames_false_positive_check": {
+    "note": "USMC public-domain frames, silhouette targets, no markers; count of detections (lower = fewer line-end false positives, but real holes are also mostly missed)",
+    "v1": [
+      15,
+      16,
+      45
+    ],
+    "v2": [
+      2,
+      3,
+      15
+    ]
+  }
+}

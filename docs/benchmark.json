@@ -1,0 +1,34 @@
+{
+  "machine": "Apple M4",
+  "python": "3.12.14",
+  "target_pipeline_yolo_ms": {
+    "median": 48.0,
+    "max": 57.0
+  },
+  "target_pipeline_classic_ms": {
+    "median": 265.0,
+    "max": 274.0
+  },
+  "pose_ms_per_frame": 20.8,
+  "pose_clip": {
+    "frames": 100,
+    "fps": 25.0,
+    "seconds": 2.08
+  },
+  "llm": {
+    "qwen3:8b": {
+      "latency_s_median": 3.57,
+      "accepted": 3,
+      "runs": 3,
+      "sample": "사수님, 탄착군이 산개하며 왼쪽 아래로 쏠렸습니다. 이는 방아쇠를 급격히 당겨 저킹이 발생했을 가능성이 가장 높습니다.  \n오늘의 훈련: 건식 사격 → 볼앤더미",
+      "error": ""
+    },
+    "qwen2.5vl:3b": {
+      "latency_s_median": 2.08,
+      "accepted": 2,
+      "runs": 3,
+      "sample": "사수님, 분석 결과에 따르면 총점이 58점으로, 탄착군 모양은 산개와 한쪽 쏠림을 보였습니다. 특히 7시 반(왼쪽 아래) 방향에서 쏠림이 발생했습니다. 가장 유력한 원인은 방아쇠 급격히 당김 (저킹)으로, 이로 인해 오른손잡이 기준 왼쪽 아래로 향하게 되었습니다.\n\n오늘의 훈련: 건식 사격 → 볼앤더미",
+      "error": ""
+    }
+  }
+}

@@ -83,6 +83,14 @@ python scripts/analyze.py samples/demo_jerking_low_left.jpg --video my_side_view
 pytest -q
 ```
 
+**폰 촬영 가이드 (마커 4개가 보일 때만 셔터가 켜짐):**
+```bash
+bash scripts/make_dev_cert.sh                # 로컬 HTTPS 인증서 (mkcert 있으면 사용, 없으면 자체 서명)
+python app/capture_server.py --https         # 폰에서 https://<PC IP>:8600
+python app/capture_server.py                 # HTTP면 사진 모드 (찍은 뒤 빠진 마커를 알려 줌)
+```
+폰 브라우저는 HTTPS에서만 실시간 카메라를 허용한다. 자체 서명 인증서는 경고를 넘겨야 하고 기기에 따라 카메라가 막힐 수 있다. 그 경우 사진 모드로 자동 전환된다. mkcert 루트 인증서를 폰에 설치하면 경고 없이 동작한다.
+
 **설명 문장(선택):** [Ollama](https://ollama.com) 설치 후 `ollama pull qwen3:8b`(권장) 또는 `ollama pull qwen2.5vl:3b`. 없으면 템플릿 문장을 쓴다.
 
 ## 실제 사격장에서 쓰는 법
@@ -92,7 +100,18 @@ pytest -q
 3. **자세 영상:** 사수 **측면 2m, 높이 1.2m**에 삼각대를 두고 **편집 없이 연속 촬영**한다. 전신이 보여야 하고, 가능하면 240fps 슬로모션으로 찍는다. 총성이 녹음되면 격발 시점이 더 정확하다. 좌우 흔들림까지 보려면 후방 영상을 추가한다.
 4. **규칙 조정:** `rules/stage1_rules.csv`(위치·모양 → 원인 가중치), `rules/causes.csv`(교정 문구·훈련), `rules/posture_signals.csv`(자세 신호 임계값). 코드는 고칠 필요 없다.
 
-## 실제 데이터로 넘어가기 (Day 1)
+## 실제 데이터로 넘어가기 — 내일 쓸 도구
+
+| 할 일 | 도구 | 결과물 |
+|---|---|---|
+| 해경 표적지 라벨링 (**PC 안에서만**) | 웹앱 왼쪽 메뉴 **🏷️ 라벨링** — 모델이 먼저 찍고, 클릭으로 추가·번호로 삭제 | `data/haegyeong/dataset/` (YOLO 형식) |
+| 파인튜닝 | `python scripts/train_detector.py --data data/haegyeong/dataset/data.yaml --model models/hole_detector.pt --epochs 20` | 새 모델 |
+| 자세 임계값 보정 | 교관이 영상별 신호 유무(1/0)를 적은 CSV → `python scripts/tune_posture_thresholds.py data/posture_labels.csv` | `rules/posture_signals.suggested.csv` + 리포트 (기존 규칙은 그대로) |
+| 교관 판정 대비 검증 | 표적지·영상·교관 판정 CSV → `python scripts/validate_vs_instructor.py data/validation.csv` | `docs/validation_report.md` (1순위·상위 3·2단계 적중률, 보류율) |
+
+각 스크립트 맨 위 주석에 CSV 형식 예시가 있다.
+
+### (선택) 공개 데이터 추가
 
 ```bash
 # Roboflow 공개 탄공 데이터 (API 키 필요: https://app.roboflow.com → Settings → API)
@@ -112,7 +131,8 @@ python scripts/train_detector.py --data data/haegyeong/data.yaml --model models/
 |---|---|
 | `shootcoach/` | 파이프라인 코드 (구조: [docs/architecture.md](docs/architecture.md)) |
 | `rules/` | **교관이 수정하는 규칙표** · 근거: [docs/rule_sources.md](docs/rule_sources.md) |
-| `app/streamlit_app.py` | 로컬 웹앱 |
+| `app/streamlit_app.py` | 로컬 웹앱 (+ `app/pages/1_라벨링.py`) |
+| `app/capture_server.py` | 폰 촬영 가이드 서버 (+ `app/static/capture.html`) |
 | `scripts/` | 표적지 생성, 합성 데이터, 학습, 평가, 벤치마크, CLI |
 | `models/hole_detector.pt` | 탄공 검출 모델 (YOLO11n, 합성 데이터 학습) |
 | `samples/` | 인쇄용 표적지, 시나리오별 데모 사진(합성) |

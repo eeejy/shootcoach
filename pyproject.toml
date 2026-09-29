@@ -18,8 +18,9 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = ["ultralytics"]
-app = ["streamlit"]
-dev = ["pytest"]
+app = ["streamlit", "streamlit-image-coordinates", "fastapi", "uvicorn", "python-multipart"]
+dev = ["pytest", "httpx"]
+e2e = ["playwright"]
 
 [tool.setuptools.packages.find]
 include = ["shootcoach*"]

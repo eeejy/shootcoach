@@ -7,3 +7,8 @@ pillow
 ultralytics>=8.3
 streamlit>=1.40
 pytest
+streamlit-image-coordinates
+fastapi
+uvicorn
+python-multipart
+httpx

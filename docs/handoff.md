@@ -19,17 +19,17 @@
 | Day 2 · VLM 설명 | ✅ | 검증 가드, qwen3:8b 우선 |
 | Day 2 · 캘리브레이션 세션 | ✅ | `diagnosis/calibration.py`, CLI `--profile` `--calibrate` 웹앱 사이드바 "사수 프로필" |
 | Day 3 · 웹앱 | ✅ | Streamlit, 폰 업로드 |
-| Day 3 · 모바일 촬영 가이드(마커 인식 시 셔터) | ⏳ | HTTPS 필요 (`mkcert`) |
-| Day 3 · 교관 판정 대비 검증 10건 | ⏳ | **실제 데이터가 있어야 가능** |
+| Day 3 · 모바일 촬영 가이드(마커 인식 시 셔터) | ✅ | `app/capture_server.py`, 크롬 가짜 카메라로 E2E 확인 (`scripts/e2e_capture_check.py`). **실제 폰 확인 ⏳** |
+| Day 3 · 교관 판정 대비 검증 10건 | 🛠️ 도구 준비 | `scripts/validate_vs_instructor.py` — 실제 데이터만 넣으면 됨 |
 | Day 3 · 발표 자료 | ⏳ | `docs/img/` 이미지와 결과 표 활용 |
 
 ## 내일 가장 먼저 할 일 (우선순위)
 
 1. **팀장: 규칙표 검토** — `rules/causes.csv`의 원인·교정 문구, `rules/stage1_rules.csv`의 `prior`. K5 권총 기준으로 맞지 않는 항목 표시.
 2. **팀장: 실제 데이터 촬영** — 마커 스티커 붙인 표적지 사진 50장, 측면 삼각대 **무편집** 자세 영상 5명 × 5발 (가능하면 240fps, 총성 녹음).
-3. **팀원2: 해경 표적지 라벨링 → 맥에서 파인튜닝** (`scripts/train_detector.py --model models/hole_detector.pt`). 외부 클라우드에 올리지 않는다.
-4. **팀원4: 실제 영상으로 2단계 임계값 보정** — `rules/posture_signals.csv`의 `threshold`. 교관이 "저킹 있음/없음"을 표시한 영상과 비교.
-5. **팀원3: 웹앱 다듬기** — 폰 화면 레이아웃, 촬영 가이드(HTTPS).
+3. **팀원2: 해경 표적지 라벨링 → 맥에서 파인튜닝** — 웹앱 **🏷️ 라벨링** 페이지 (Roboflow 등 외부 서비스 사용 금지). 그다음 `scripts/train_detector.py --data data/haegyeong/dataset/data.yaml --model models/hole_detector.pt`.
+4. **팀원4: 실제 영상으로 2단계 임계값 보정** — 교관 라벨 CSV → `scripts/tune_posture_thresholds.py` → 추천값 검토 후 `rules/posture_signals.csv`에 반영.
+5. **팀원3: 실제 폰으로 촬영 가이드 확인** — `bash scripts/make_dev_cert.sh` → `python app/capture_server.py --https` → 폰에서 `https://<PC IP>:8600`. iPhone/Android 각각 실시간 모드가 켜지는지 기록.
 
 ## 실행 명령 모음
 

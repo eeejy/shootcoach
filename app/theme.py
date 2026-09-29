@@ -1,193 +1,79 @@
-"""BullsAI 공통 UI 테마 — Pretendard 기반, 이모지 없는 차분한 B2B/공공 톤.
-
-두 Streamlit 페이지(메인, 라벨링)에서 `apply_theme()`를 호출해 동일한
-글꼴·색상·컴포넌트 스타일을 적용한다. 색상은 zinc 중립 + 단일 딥블루 accent.
-"""
+"""Shared BullsAI bullseye and pixel arcade theme."""
 from __future__ import annotations
+
+from html import escape
 
 import streamlit as st
 
-# 디자인 토큰
-ACCENT = "#1d4ed8"          # 딥블루 (신뢰형 B2B/공공)
-ACCENT_HOVER = "#1e40af"
-INK = "#18181b"             # 본문 텍스트 (zinc-900)
-INK_MUTED = "#52525b"       # 보조 텍스트 (zinc-600)
-INK_FAINT = "#a1a1aa"       # 뮤트 (zinc-400)
-LINE = "rgba(24,24,27,0.08)"   # hairline 경계
-SURFACE = "#ffffff"
-CANVAS = "#fafafa"          # zinc-50
-
-_CSS = f"""
+_CSS = """
 <style>
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
-
-:root {{
-    --ba-accent: {ACCENT};
-    --ba-accent-hover: {ACCENT_HOVER};
-    --ba-ink: {INK};
-    --ba-ink-muted: {INK_MUTED};
-    --ba-line: {LINE};
-}}
-
-html, body, [class*="css"], .stApp,
-button, input, textarea, select {{
-    font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
-        "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}}
-
-.stApp {{ background: {CANVAS}; }}
-
-/* 헤딩: bold 금지, semibold + tracking-tight */
-h1, h2, h3, h4 {{
-    color: {INK};
-    font-weight: 600 !important;
-    letter-spacing: -0.02em;
-}}
-h1 {{ font-size: 1.9rem !important; }}
-h2 {{ font-size: 1.35rem !important; }}
-h3 {{ font-size: 1.1rem !important; }}
-
-p, span, label, li, .stMarkdown {{ color: {INK}; }}
-
-/* 본문/캡션 대비 계층 */
-.stCaption, [data-testid="stCaptionContainer"], small {{
-    color: {INK_MUTED} !important;
-    font-size: 0.82rem;
-}}
-
-/* 사이드바 */
-[data-testid="stSidebar"] {{
-    background: {SURFACE};
-    border-right: 1px solid {LINE};
-}}
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] .stHeadingContainer {{ font-size: 1rem !important; }}
-
-/* 탭 — 밑줄형, accent 강조 */
-.stTabs [data-baseweb="tab-list"] {{
-    gap: 0.25rem;
-    border-bottom: 1px solid {LINE};
-}}
-.stTabs [data-baseweb="tab"] {{
-    font-weight: 500;
-    color: {INK_MUTED};
-    padding: 0.5rem 0.9rem;
-}}
-.stTabs [aria-selected="true"] {{
-    color: {ACCENT} !important;
-}}
-.stTabs [data-baseweb="tab-highlight"] {{ background-color: {ACCENT}; }}
-
-/* 기본(primary) 버튼 — 단일 solid, accent */
-.stButton > button[kind="primary"],
-.stDownloadButton > button[kind="primary"] {{
-    background: {ACCENT};
-    border: 1px solid {ACCENT};
-    color: #fff;
-    font-weight: 500;
-    border-radius: 8px;
-    box-shadow: none;
-    transition: background 160ms ease;
-}}
-.stButton > button[kind="primary"]:hover,
-.stDownloadButton > button[kind="primary"]:hover {{
-    background: {ACCENT_HOVER};
-    border-color: {ACCENT_HOVER};
-    color: #fff;
-}}
-
-/* 보조 버튼 — outline/ghost */
-.stButton > button:not([kind="primary"]),
-.stDownloadButton > button:not([kind="primary"]) {{
-    background: {SURFACE};
-    border: 1px solid {LINE};
-    color: {INK};
-    font-weight: 500;
-    border-radius: 8px;
-    box-shadow: none;
-}}
-.stButton > button:not([kind="primary"]):hover,
-.stDownloadButton > button:not([kind="primary"]):hover {{
-    border-color: {ACCENT};
-    color: {ACCENT};
-}}
-
-/* 입력 요소 */
-[data-baseweb="input"] input,
-[data-baseweb="select"] > div,
-.stNumberInput input,
-.stTextInput input {{
-    border-radius: 8px !important;
-}}
-
-/* metric 카드 */
-[data-testid="stMetric"] {{
-    background: {SURFACE};
-    border: 1px solid {LINE};
-    border-radius: 10px;
-    padding: 0.9rem 1rem;
-}}
-[data-testid="stMetricLabel"] {{ color: {INK_MUTED} !important; }}
-[data-testid="stMetricValue"] {{
-    color: {INK} !important;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-}}
-
-/* expander — hairline, 그림자 제거 */
-[data-testid="stExpander"] {{
-    border: 1px solid {LINE};
-    border-radius: 10px;
-    box-shadow: none;
-    background: {SURFACE};
-}}
-
-/* 알림 박스 — 톤 다운 */
-[data-testid="stAlert"] {{
-    border-radius: 10px;
-    border: 1px solid {LINE};
-}}
-
-/* 표 */
-[data-testid="stDataFrame"] {{ border-radius: 10px; }}
-
-/* 상단 여백 정리 */
-.block-container {{ padding-top: 2.2rem; }}
-
-/* 브랜드 워드마크 */
-.ba-brand {{
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-}}
-.ba-brand .ba-name {{
-    font-size: 1.9rem;
-    font-weight: 600;
-    letter-spacing: -0.03em;
-    color: {INK};
-}}
-.ba-brand .ba-name b {{ color: {ACCENT}; font-weight: 600; }}
-.ba-brand .ba-tag {{
-    font-size: 0.9rem;
-    color: {INK_MUTED};
-    font-weight: 500;
-}}
+@import url('https://fonts.googleapis.com/css2?family=Black+Ops+One&family=IBM+Plex+Mono:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;700;800&display=swap');
+:root { --red:#ff343e; --ink:#f5f0e9; --muted:#aca2a3; --line:#49383b; --panel:#191719; }
+html,body,.stApp,button,input,textarea,select { font-family:"Noto Sans KR",sans-serif !important; }
+.stApp { color:var(--ink); background-color:#0c0c0e; background-image:linear-gradient(#ffffff04 1px,transparent 1px),linear-gradient(90deg,#ffffff04 1px,transparent 1px); background-size:24px 24px; }
+.block-container { max-width:1280px; padding-top:2.4rem; padding-bottom:5rem; }
+h1,h2,h3,h4,p,label,li,.stMarkdown,.stText,[data-testid="stMetricValue"] { color:var(--ink) !important; }
+h1,h2,h3 { letter-spacing:-.035em; font-weight:800 !important; }
+h1 { font-size:clamp(2rem,4vw,3.2rem) !important; }
+.stCaption,[data-testid="stCaptionContainer"],small { color:var(--muted) !important; }
+a { color:#ff7479 !important; } hr { border-color:var(--line) !important; }
+[data-testid="stSidebar"] { background:#111113; border-right:1px solid var(--line); }
+[data-testid="stSidebar"] > div:first-child { padding-top:1.4rem; }
+[data-testid="stSidebar"] .stMarkdown h6 { color:var(--red) !important; font:700 .73rem "IBM Plex Mono",monospace !important; letter-spacing:.12em; margin-top:2rem; }
+.stTabs [data-baseweb="tab-list"] { gap:.35rem; border-bottom:1px solid var(--line); padding-bottom:.55rem; flex-wrap:wrap; }
+.stTabs [data-baseweb="tab"] { color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:0; padding:.65rem 1rem; font-weight:700; }
+.stTabs [data-baseweb="tab"]:hover { color:var(--ink); border-color:var(--red); }
+.stTabs [data-baseweb="tab"][aria-selected="true"] { color:#fff !important; background:#801c27; border-color:var(--red); }
+.stTabs [data-baseweb="tab-highlight"] { display:none; }
+[data-testid="stTabContent"] { padding-top:1.4rem; }
+.stButton > button,.stDownloadButton > button { min-height:2.7rem; border-radius:0 !important; font-weight:800; transition:background .15s,border-color .15s,transform .15s; }
+.stButton > button:hover,.stDownloadButton > button:hover { transform:translateY(-2px); }
+.stButton > button[kind="primary"],.stDownloadButton > button[kind="primary"] { color:#fff !important; background:var(--red) !important; border:1px solid #ff777c !important; box-shadow:4px 4px 0 #8b1a24; }
+.stButton > button[kind="primary"]:hover,.stDownloadButton > button[kind="primary"]:hover { background:#db2631 !important; }
+.stButton > button:not([kind="primary"]),.stDownloadButton > button:not([kind="primary"]) { color:var(--ink) !important; background:#231e20 !important; border:1px solid #695052 !important; }
+.stButton > button:not([kind="primary"]):hover,.stDownloadButton > button:not([kind="primary"]):hover { border-color:var(--red) !important; }
+[data-baseweb="input"],[data-baseweb="select"] > div,[data-baseweb="textarea"],[data-baseweb="base-input"],[data-testid="stFileUploaderDropzone"] { background:#1c1b1e !important; border-color:#59494c !important; border-radius:0 !important; color:var(--ink) !important; }
+input,textarea,[data-baseweb="select"] span { color:var(--ink) !important; }
+[data-testid="stFileUploaderDropzone"] { border-style:dashed !important; padding:1.2rem; }
+[data-testid="stMetric"],[data-testid="stExpander"] { background:var(--panel); border:1px solid var(--line); border-radius:0; box-shadow:none; }
+[data-testid="stMetric"] { padding:1rem; border-top:3px solid var(--red); }
+[data-testid="stMetricLabel"] { color:var(--muted) !important; }
+[data-testid="stMetricValue"] { font:700 clamp(1.3rem,2vw,2rem) "IBM Plex Mono",monospace !important; }
+[data-testid="stExpander"] summary { color:var(--ink) !important; }
+[data-testid="stAlert"],[data-testid="stDataFrame"],[data-testid="stImage"] img { border-radius:0; }
+.ba-brand { display:flex; align-items:center; gap:.7rem; margin:.15rem 0 1rem; }
+.ba-target { width:36px; height:36px; flex:none; border:2px solid var(--red); border-radius:50%; background:radial-gradient(circle,var(--red) 0 16%,#191518 17% 35%,var(--red) 36% 52%,#191518 53% 69%,var(--red) 70%); box-shadow:3px 3px 0 #7c1d25; }
+.ba-name { color:var(--ink); font:400 1.6rem "Black Ops One","IBM Plex Mono",monospace; letter-spacing:.02em; }
+.ba-name b { color:var(--red); font-weight:inherit; }
+.ba-tag { display:block; color:var(--muted); font:600 .68rem "IBM Plex Mono",monospace; letter-spacing:.08em; }
+.ba-hero { position:relative; overflow:hidden; min-height:265px; border:1px solid #713238; border-left:5px solid var(--red); background:radial-gradient(circle at 77% 55%,#66151e 0,#2b1218 21%,transparent 53%),linear-gradient(110deg,#23191b,#101012 68%,#290e15); padding:clamp(1.5rem,3.5vw,3rem); margin-bottom:1.7rem; box-shadow:0 18px 45px #0009,7px 7px 0 #260f14,inset 0 1px #a5535566; }
+.ba-hero:before { content:""; position:absolute; inset:0; background:repeating-linear-gradient(0deg,#0000 0 3px,#0004 4px 5px),linear-gradient(135deg,#ffffff0a,transparent 35%); opacity:.5; pointer-events:none; }
+.ba-hero:after { content:""; position:absolute; width:295px; height:295px; right:6%; top:-20px; border:1px solid #ff434a99; border-radius:50%; background:linear-gradient(90deg,transparent 49.8%,#ff52545c 50%,transparent 50.2%),linear-gradient(transparent 49.8%,#ff52545c 50%,transparent 50.2%),radial-gradient(circle,#ff5158 0 3%,#ff666b88 3.5% 4%,transparent 4.5% 17%,#ff494c99 17.4% 18%,transparent 18.5% 35%,#ff414677 35.4% 36%,transparent 36.5% 49%,#f7383d77 49.4% 50%,transparent 50.5%),radial-gradient(circle,#ff2c3466,transparent 55%); box-shadow:0 0 65px #d51e2966,inset 0 0 30px #e12d3244; filter:drop-shadow(0 0 13px #e52b39); pointer-events:none; }
+.ba-eyebrow { color:#ff6a71; font:700 .76rem "IBM Plex Mono",monospace; letter-spacing:.17em; }
+.ba-hero h1 { margin:.8rem 0 .4rem; position:relative; z-index:1; }
+.ba-hero p { max-width:550px; color:#c8bfc0 !important; line-height:1.75; margin:0; position:relative; z-index:1; }
+.ba-step { display:inline-block; color:#f7b2b5; font:600 .7rem "IBM Plex Mono",monospace; letter-spacing:.11em; margin:0 0 .6rem; }
+@media(max-width:640px) { .block-container { padding:1.2rem .9rem 3rem; } .ba-hero { min-height:250px; } .ba-hero:after { right:-160px; opacity:.3; } .stTabs [data-baseweb="tab"] { padding:.5rem .6rem; font-size:.78rem; } }
 </style>
 """
 
 
 def apply_theme() -> None:
-    """전역 CSS와 글꼴을 주입한다. 각 페이지 상단에서 한 번 호출."""
     st.markdown(_CSS, unsafe_allow_html=True)
 
 
 def brand_header(tagline: str = "") -> None:
-    """BullsAI 워드마크 헤더를 렌더링한다 (이모지 없음)."""
-    tag = f'<span class="ba-tag">{tagline}</span>' if tagline else ""
+    tag = f'<span class="ba-tag">{escape(tagline)}</span>' if tagline else ""
     st.markdown(
-        f'<div class="ba-brand"><span class="ba-name">Bulls<b>AI</b></span>{tag}</div>',
+        f'<div class="ba-brand"><span class="ba-target" aria-hidden="true"></span>'
+        f'<span><span class="ba-name">BULLS<b>AI</b></span>{tag}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def hero(title: str, description: str, eyebrow: str = "TARGET ACQUIRED // BULLSAI") -> None:
+    st.markdown(
+        f'<section class="ba-hero"><span class="ba-eyebrow">{escape(eyebrow)}</span>'
+        f'<h1>{escape(title)}</h1><p>{escape(description)}</p></section>',
         unsafe_allow_html=True,
     )

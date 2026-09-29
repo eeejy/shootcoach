@@ -91,18 +91,18 @@ def index(t: str | None = None):
     return FileResponse(ROOT / "app" / "static" / "capture.html")
 
 
-EMBLEM = ROOT / "app" / "static" / "brand" / "ssat_emblem.png"
+LOGO = ROOT / "app" / "static" / "bullsai_logo.png"
 
 
 @app.get("/favicon.ico")
 def favicon():
-    return FileResponse(EMBLEM) if EMBLEM.exists() else Response(status_code=204)
+    return FileResponse(LOGO) if LOGO.exists() else Response(status_code=204)
 
 
-@app.get("/brand/emblem.png")
-def emblem():
-    # 마크 원본 파일을 그대로 전송 (가공 없음). 파일이 없으면 페이지가 텍스트 로고로 대체한다.
-    return FileResponse(EMBLEM, media_type="image/png") if EMBLEM.exists() else Response(status_code=404)
+@app.get("/logo.png")
+def logo():
+    # 앱 로고 원본을 그대로 전송 (가공 없음)
+    return FileResponse(LOGO, media_type="image/png") if LOGO.exists() else Response(status_code=404)
 
 
 @app.post("/api/markers")
@@ -120,7 +120,7 @@ async def api_markers(frame: UploadFile = File(...), x_token: str | None = Heade
 
 @app.post("/api/analyze")
 async def api_analyze(photo: UploadFile = File(...), handedness: str = Form("right"),
-                      distance_m: float = Form(15.0), x_token: str | None = Header(None)):
+                      distance_m: float = Form(10.0), x_token: str | None = Header(None)):
     if not _check_token(x_token):
         return JSONResponse({"error": "토큰이 없거나 틀립니다."}, status_code=403)
     if handedness not in ("right", "left"):

@@ -27,7 +27,7 @@ async def main(out: str, mobile: bool):
         await page.screenshot(path=f"{out}/{tag}2_result.png", full_page=True)
         await page.get_by_role("tab").nth(1).click()
         await asyncio.sleep(1)
-        sim = page.locator('[data-testid="stSelectbox"]').filter(has_text="합성").first
+        sim = page.locator('[data-testid="stSelectbox"]').filter(has_text="데모 영상").first
         await sim.click()
         await page.get_by_role("option", name="격발 직전 총구 하강").click()
         await page.get_by_role("button", name="자세 분석").click()

@@ -33,7 +33,7 @@ from shootcoach.target.detect import ClassicHoleDetector, get_detector  # noqa: 
 from shootcoach.target.markers import MarkerError  # noqa: E402
 from shootcoach.target.template import save_printable  # noqa: E402
 
-from app.theme import apply_theme, brand_header, hero, local_note, page_icon, section, sidebar_nav, step  # noqa: E402
+from app.theme import apply_theme, banner, brand_header, page_icon, section, sidebar_nav, step  # noqa: E402
 
 st.set_page_config(page_title="BullsAI · AI 사격 교정", page_icon=page_icon(), layout="wide")
 apply_theme()
@@ -57,28 +57,23 @@ with st.sidebar:
     section("SHOOTER")
     hand = st.radio("주로 쓰는 손", ["right", "left"], format_func=lambda x: "오른손" if x == "right" else "왼손")
     section("RANGE")
-    distance = st.number_input("사격 거리 (m)", 3.0, 50.0, 15.0, 1.0)
-    click = st.number_input("조준기 1클릭 값 (mm @10m, 모르면 0)", 0.0, 50.0, 0.0, 0.5)
+    distance = st.number_input("사격 거리 (m)", 3.0, 50.0, 10.0, 1.0)
     section("ENGINE")
     det_kind = st.selectbox("탄공 검출기", ["auto", "classic"],
                             format_func=lambda x: "딥러닝 (YOLO)" if x == "auto" else "전통 영상처리 (대체)")
-    shooter = st.text_input("사수 프로필 (캘리브레이션, 비우면 사용 안 함)", "")
-    use_vlm = st.checkbox("로컬 VLM으로 설명 문장 생성", value=False)
+    shooter = st.text_input("사수 프로필", "")
+    use_vlm = st.checkbox("AI 설명 문장", value=False)
     if use_vlm:
-        st.caption("Ollama 연결됨" if vlm_available() else "Ollama 미실행 — 템플릿 문장 사용")
-    st.write("")
-    local_note()
+        st.caption("연결됨" if vlm_available() else "Ollama 꺼짐 — 기본 문장 사용")
 
-hero("한 발 더 정확하게.",
-     "표적지 한 장으로 탄착군을 읽고, 자세 영상으로 원인을 하나로 좁힙니다. 채점부터 교정 훈련까지 이 PC 안에서 끝납니다.",
-     chips=[("STAGE 1", "표적지 진단"), ("STAGE 2", "자세 확정"), ("PROCESS", "< 0.1s"), ("DATA", "LOCAL ONLY")])
+banner()
 tab1, tab2, tab3, tab4 = st.tabs(["표적지 분석", "자세 영상", "설명 문장", "표적지 인쇄"])
 
 with tab1:
     step("01", "TARGET ANALYSIS")
     c1, c2 = st.columns([1, 1])
     with c1:
-        up = st.file_uploader("표적지 사진 (네 모서리 마커가 모두 보이게)", type=["jpg", "jpeg", "png"])
+        up = st.file_uploader("표적지 사진", type=["jpg", "jpeg", "png"])
         demos = sorted(p.name for p in (ROOT / "samples").glob("demo_*.jpg"))
         demo = st.selectbox("또는 데모 사진", ["(선택 안 함)"] + demos)
         go = st.button("분석하기", type="primary")
@@ -92,12 +87,12 @@ with tab1:
             st.warning("사진을 올리거나 데모 사진을 고르세요.")
         else:
             try:
-                res = analyze_target(img, SPEC, hand, distance, click or None, detector(det_kind))
+                res = analyze_target(img, SPEC, hand, distance, None, detector(det_kind))
                 if shooter.strip():
                     prof_path = ROOT / "profiles" / f"{shooter.strip()}.json"
                     if prof_path.exists():
                         st_ = group_stats(res.holes, SPEC)
-                        s1 = apply_profile(diagnose_stage1(st_, SPEC, hand, distance, click or None), st_,
+                        s1 = apply_profile(diagnose_stage1(st_, SPEC, hand, distance, None), st_,
                                            ShooterProfile.load(prof_path))
                         res.report["stage1"] = s1.as_dict()
                 st.session_state["report"] = res.report
@@ -110,7 +105,7 @@ with tab1:
     if rep:
         g, s1 = rep["group"], rep["stage1"]
         with c2:
-            st.image(cv2.cvtColor(st.session_state["overlay"], cv2.COLOR_BGR2RGB), caption="검출 결과 (주황: 탄공·점수, 파랑: 탄착군 중심·평균 반경, 초록: 중심 → 탄착군)")
+            st.image(cv2.cvtColor(st.session_state["overlay"], cv2.COLOR_BGR2RGB))
         m = st.columns(5)
         m[0].metric("탄 수", g["n"])
         m[1].metric("총점", g["total_score"])
@@ -131,7 +126,6 @@ with tab1:
         st.download_button("리포트 JSON 받기", to_json(rep), "report.json", "application/json")
         if shooter.strip():
             with st.expander("진단 세션으로 기록 (캘리브레이션)"):
-                st.caption("사수가 일부러 특정 오류를 내며 쏜 표적지라면, 그 오류가 이 사수에게서 어느 방향으로 나타나는지 기록합니다.")
                 causes = load_causes()
                 cid = st.selectbox("일부러 낸 오류", sorted(causes), format_func=lambda k: causes[k].cause_ko)
                 if st.button("이 표적지를 기록"):
@@ -147,9 +141,8 @@ with tab2:
     if not rep:
         st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
     else:
-        st.write("측면(사수 옆 2m, 높이 1.2m) 삼각대 촬영 영상을 올리세요. 총성이 녹음되어 있으면 격발 시점을 더 정확히 찾습니다.")
         vid = st.file_uploader("자세 영상", type=["mp4", "mov", "m4v"])
-        sim = st.selectbox("또는 합성 자세 데모 (실제 영상이 없을 때)",
+        sim = st.selectbox("또는 데모 영상",
                            ["(선택 안 함)", "정상 자세", "격발 직전 총구 하강", "격발 직전 총구 들림 + 어깨 긴장",
                             "격발 직후 팔 내림", "조준 중 호흡 흔들림"])
         if st.button("자세 분석", type="primary"):
@@ -182,7 +175,7 @@ with tab2:
             seq = st.session_state.get("stage2_seq")
             if seq is not None:
                 _, pitch, _ = arm_series(seq, hand)
-                st.line_chart(pd.DataFrame({"팔뚝 각도(°)": pitch}, index=np.round(seq.t, 2)), height=220)
+                st.line_chart(pd.DataFrame({"팔뚝 각도(°)": pitch}, index=np.round(seq.t, 2)), height=220, color="#cf3a30")
                 st.image([cv2.cvtColor(k, cv2.COLOR_BGR2RGB) for k in key_frames(seq, s2["shot_times"][0])],
                          caption=["격발 0.3초 전", "격발 직전", "격발 0.5초 후"], width=220)
 
@@ -200,11 +193,10 @@ with tab3:
         st.write(ex["text"])
         st.caption(f"출처: {'로컬 VLM ' + ex.get('model', '') if ex['source'] == 'vlm' else '템플릿'} · {ex['latency_s']}초"
                    + (f" · 오류: {ex['error']}" if ex.get("error") else ""))
-        st.caption("VLM은 판정하지 않고, 규칙 엔진 결과를 사람 말로 풀어주기만 합니다.")
 
 with tab4:
     step("04", "PRINT TARGET")
-    st.write("A4 연습용 표적지입니다. **배율 100%(실제 크기)**로 인쇄하세요. 실제 사격장 표적지에는 같은 마커를 스티커로 붙이고 위치를 실측해 설정 파일을 만듭니다.")
+    st.caption("A4 · 배율 100%로 인쇄")
     png, pdf = save_printable(SPEC, ROOT / "samples")
     st.download_button("PDF 받기", pdf.read_bytes(), pdf.name, "application/pdf")
     st.image(str(png), width=320)

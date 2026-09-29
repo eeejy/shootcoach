@@ -17,11 +17,11 @@ from shootcoach.labeling import dataset_counts, draw_label_view, list_images, lo
 from shootcoach.target.detect import Hole, get_detector  # noqa: E402
 from shootcoach.target.markers import MarkerError  # noqa: E402
 
-from app.theme import apply_theme, brand_header, hero, local_note, page_icon, section, sidebar_nav  # noqa: E402
+from app.theme import apply_theme, brand_header, page_icon, page_title, section, sidebar_nav  # noqa: E402
 
 st.set_page_config(page_title="BullsAI · 탄공 라벨링", page_icon=page_icon(), layout="wide")
 apply_theme()
-hero("탄공 라벨링", "모델이 먼저 찾은 탄공을 확인하고, 클릭으로 추가·번호로 삭제해 파인튜닝 데이터를 만듭니다. 사진은 이 PC 밖으로 나가지 않습니다.", "SSAT · LABEL STUDIO", chips=[("OUTPUT", "YOLO DATASET"), ("DATA", "LOCAL ONLY")], show_emblem=False)
+page_title("탄공 라벨링")
 
 configs = sorted((ROOT / "configs").glob("*.yaml"))
 with st.sidebar:
@@ -35,7 +35,6 @@ with st.sidebar:
     display_w = st.slider("화면 표시 폭(px)", 400, 1000, 640, 20)
     counts = dataset_counts(out)
     st.caption(f"학습 {counts['train']['images']}장 · 탄공 {counts['train']['holes']}개 / 검증 {counts['val']['images']}장 · 탄공 {counts['val']['holes']}개")
-    local_note()
 
 DATA_ROOT = (ROOT / "data").resolve()
 
@@ -93,7 +92,7 @@ with c1:
         st.rerun()
 with c2:
     st.subheader(f"{path.name} · 탄공 {len(holes)}개")
-    st.caption("모델이 제안한 탄공과 사람이 추가한 탄공이 함께 표시됩니다. 이미지를 클릭하면 탄공이 추가됩니다.")
+    st.caption("이미지 클릭 = 탄공 추가")
     drop = st.multiselect("지울 번호 (오검출)", list(range(1, len(holes) + 1)))
     if st.button("선택 삭제") and drop:
         st.session_state["holes"] = [h for i, h in enumerate(holes, 1) if i not in set(drop)]
@@ -109,4 +108,3 @@ with c2:
     st.divider()
     st.code(f"python scripts/train_detector.py --data {Path(out) / 'data.yaml'} --model models/hole_detector.pt --epochs 20 --name haegyeong",
             language="bash")
-    st.caption("파인튜닝은 이 PC에서 실행합니다. 50장 기준 수십 분.")

@@ -12,11 +12,11 @@ gatherUsageStats = false    # Streamlit 사용 통계 외부 전송 끔 (로컬 
 toolbarMode = "minimal"
 showSidebarNavigation = false   # 기본 메뉴 대신 theme.sidebar_nav() 사용
 
-# BullsAI — SSAT 마크 톤: 다크 네이비 · 스틸 · 오션 블루 · 골드
+# BullsAI — 앱 로고 톤: 차콜 · 스틸 · 레드
 [theme]
 base = "dark"
-primaryColor = "#3479b8"
-backgroundColor = "#0b0e14"
-secondaryBackgroundColor = "#141a24"
-textColor = "#e8ecf1"
+primaryColor = "#b3261e"
+backgroundColor = "#161618"
+secondaryBackgroundColor = "#1f1f22"
+textColor = "#ecebe8"
 font = "sans serif"

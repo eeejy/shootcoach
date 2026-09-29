@@ -68,8 +68,8 @@
 ## 빠른 시작 — 다른 컴퓨터에서 클론해서 쓰기
 
 ```bash
-git clone https://github.com/eeejy/ai-shooting-coach.git
-cd ai-shooting-coach
+git clone https://github.com/eeejy/shootcoach.git
+cd shootcoach
 bash scripts/setup.sh                                     # macOS / Linux
 # powershell -ExecutionPolicy Bypass -File scripts\setup.ps1   # Windows
 ```

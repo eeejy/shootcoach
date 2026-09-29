@@ -1,43 +1,60 @@
-# 인수인계 — 야간 작업 결과와 팀이 이어서 할 일
+# 인수인계 — 2차 개편 (마커 제거 · 교관 지식베이스 · 실사진 모델)
 
-## 3일 스프린트 대비 진행 상황
+2026-09-29~30. 해경 표적에 **마커가 없다**는 사실과 교관 자료 2종을 반영해 전체를 다시 짰다.
 
-| 계획 항목 | 상태 | 비고 |
+## 무엇이 바뀌었나
+
+| 항목 | 이전 | 지금 |
 |---|---|---|
-| Day 0 · Python 3.12 환경, Ollama 모델 | ✅ | `uv` + `.venv`, `qwen2.5vl:3b` 받음, `qwen3:8b`는 기존 설치분 사용 |
-| Day 0 · ArUco 마커 표적지 템플릿 | ✅ | `samples/a4_practice_target.pdf` (100% 인쇄) |
-| Day 0 · 교범 기반 규칙표 초안 | ✅ **(팀장 검토 필요)** | `rules/*.csv`, 근거 `docs/rule_sources.md` |
-| Day 0 · Kaggle/Roboflow 가입 | ⏳ | 계정·API 키는 사람이 해야 함. 합성 데이터로 먼저 진행 |
-| Day 0 · 해경 표적지 규격 확인 | ⏳ | 규격이 나오면 `configs/`에 새 YAML 추가 |
-| Day 1 · 마커 → 호모그래피 → mm | ✅ | 재투영 오차 약 0.03mm (합성) |
-| Day 1 · YOLO 학습 | ✅ (합성) | 실제 데이터 파인튜닝은 ⏳ |
-| Day 1 · 탄착 통계 + 모양 분류 | ✅ | 7종 모양, 플라이어 제외 |
-| Day 1 · 회차 간 IoU 매칭 | ✅ | `target/sequence.py`, CLI `--prev` |
-| Day 1 · 1단계 진단 엔진 + 결과 화면 | ✅ | 웹앱 ① 탭 |
-| Day 2 · 관절 + 격발 검출 | ✅ | 반동 스파이크 + 총성 + 편집 컷 제외 |
-| Day 2 · 자세 특징 + 2단계 엔진 | ✅ (합성 검증) | 실제 영상 임계값 보정 ⏳ |
-| Day 2 · VLM 설명 | ✅ | 검증 가드, qwen3:8b 우선 |
-| Day 2 · 캘리브레이션 세션 | ✅ | `diagnosis/calibration.py`, CLI `--profile` `--calibrate` 웹앱 사이드바 "사수 프로필" |
-| Day 3 · 웹앱 | ✅ | Streamlit, 폰 업로드 |
-| Day 3 · 모바일 촬영 가이드(마커 인식 시 셔터) | ✅ | `app/capture_server.py`, 크롬 가짜 카메라로 E2E 확인 (`scripts/e2e_capture_check.py`). **실제 폰 확인 ⏳** |
-| Day 3 · 교관 판정 대비 검증 10건 | 🛠️ 도구 준비 | `scripts/validate_vs_instructor.py` — 실제 데이터만 넣으면 됨 |
-| Day 3 · 발표 자료 | ⏳ | `docs/img/` 이미지와 결과 표 활용 |
+| 표적 찾기 | 네 모서리 ArUco 마커 → 호모그래피 | **검은 조준 원(7점 경계) 타원 맞춤 → 원으로 펴기**. 마커 불필요 |
+| 표적 규격 | A4 연습 표적 | `configs/kcg_circle.yaml` (25m 정밀 권총 표적 구조로 가정, 링 간격 25mm) |
+| 탄공 모델 | 합성 표적지로만 학습 (실사진 거의 못 찾음) | **Roboflow 공개 실사진 4종 3,699장으로 YOLO11s 학습** `models/hole_detector_photo.pt` |
+| 발수 보정 | 없음 | 발수에 맞춰 신뢰도 기준 조정 → 뭉친 탄공 나누기 → 검은 원 안의 밝은 탄공 보충 |
+| 진단 | 표 조회 규칙(`causes.csv`, `stage1_rules.csv`) | **교관 지식베이스** `rules/instructor_kb.yaml` — 상하·좌우 성분 가중합, 대각선 조합, 분산 축, 영점 우선, 사수 프로필 |
+| 사람 확인 | 없음 | 결과 사진을 **눌러 탄공 추가/삭제**, 원인별 현장 확인 체크리스트, 교관 판정 기록 |
+| 속사(하반신) 표적 | 없음 | 원형이 아니면 탄공 **개수만** |
+| 삭제 | | 탄공 라벨링 페이지, 표적지 인쇄 기능, 합성 데이터 생성기, 옛 합성 모델 |
 
-## 내일 가장 먼저 할 일 (우선순위)
+## 성능
 
-1. **팀장: 규칙표 검토** — `rules/causes.csv`의 원인·교정 문구, `rules/stage1_rules.csv`의 `prior`. K5 권총 기준으로 맞지 않는 항목 표시.
-2. **팀장: 실제 데이터 촬영** — 마커 스티커 붙인 표적지 사진 50장, 측면 삼각대 **무편집** 자세 영상 5명 × 5발 (가능하면 240fps, 총성 녹음).
-3. **팀원2: 해경 표적지 라벨링 → 맥에서 파인튜닝** — 웹앱 **🏷️ 라벨링** 페이지 (Roboflow 등 외부 서비스 사용 금지). 그다음 `scripts/train_detector.py --data data/haegyeong/dataset/data.yaml --model models/hole_detector.pt`.
-4. **팀원4: 실제 영상으로 2단계 임계값 보정** — 교관 라벨 CSV → `scripts/tune_posture_thresholds.py` → 추천값 검토 후 `rules/posture_signals.csv`에 반영.
-5. **팀원3: 실제 폰으로 촬영 가이드 확인** — `bash scripts/make_dev_cert.sh` → `python app/capture_server.py --https` → 폰에서 `https://<PC IP>:8600`. iPhone/Android 각각 실시간 모드가 켜지는지 기록.
+| 평가 | 데이터 | 정밀도 | 재현율 | F1 |
+|---|---|---|---|---|
+| 탄공 검출 · 공개 시험셋 | Roboflow 시험 206장 / 탄공 1,380개 | 0.923 | 0.933 | **0.928** |
+| 탄공 검출 · 해경 실사진 (AI만) | 원형 표적 9장 / 탄공 104개 | 0.964 | 0.769 | 0.856 |
+| 탄공 검출 · 해경 실사진 (+ 발수 보정) | 같음 | 0.908 | 0.856 | **0.881** |
 
-## 실행 명령 모음
+- **해경 실사진은 학습에 한 장도 쓰지 않았다.** 정답은 사진을 보고 사람이 표시했다.
+- 표적 찾기(마커 없음): 원형 표적 **11/11장** 성공. 하반신·영점 표적은 원형이 아니라고 정상 판별.
+- 맞게 찾은 탄공의 **점수 일치 95.5%**.
+- 선명한 원본 사진 3장은 **37개 중 36개**를 찾았다. 놓친 탄공은 대부분 흐리거나 압축된 사진, 여러 발이 겹친 곳이다.
+- 자세 2단계(합성 영상 6개 상황): 모두 기대한 판정.
+- 속도(Apple M4): 표적 사진 1장 **약 0.5초**, 자세 영상 관절 추출 프레임당 21ms.
+
+| 버전 | 해경 실사진 F1 (발수 보정) |
+|---|---|
+| 합성 표적지로만 학습한 1차 모델 | 실사진 탄공 대부분 놓침 |
+| 공개 실사진 8에포크 (중간) | 0.813 |
+| **공개 실사진 30에포크 + 좌우 뒤집기·배율 TTA (최종)** | **0.881** |
+
+세부 수치: `docs/results.json`, 학습 곡선: `docs/train_real_v1_results.csv`, 속도: `docs/benchmark.json`
+
+## 팀이 이어서 할 일 (우선순위)
+
+1. **교관: 지식베이스 검토** — `rules/instructor_kb.yaml`의 원인 이름·설명·체크리스트·`prior`·대각선 조합. 문구만 고쳐도 앱에 바로 반영된다.
+2. **실물 표적 자로 재기** — 10점 원 반지름과 링 간격이 25mm가 아니면 `configs/kcg_circle.yaml` 두 값만 고친다.
+3. **정면·원본으로 촬영** — 흐리거나 카톡으로 압축된 사진에서 검출이 크게 떨어진다. 검은 원이 화면의 1/3 이상 차게 찍는다.
+4. **교관 수정 결과 모으기** — 앱에서 고친 탄공 위치가 해경 표적 정답 데이터가 된다. 50장이 모이면 추가 학습한다.
+5. **속사 표적 채점 규정** — 영역별 점수(2·5·4점 등)를 받으면 개수 세기에 영역 채점을 붙인다.
+6. **자세 영상 임계값** — 실제 영상에 교관 라벨을 달아 `scripts/tune_posture_thresholds.py`로 보정한다.
+
+## 실행 명령
 
 ```bash
-source .venv/bin/activate   # 또는 각 명령 앞에 uv run
-streamlit run app/streamlit_app.py                      # 웹앱
-python scripts/analyze.py samples/demo_jerking_low_left.jpg --vlm
-python scripts/evaluate.py --n 200                      # 합성 평가 → docs/results.json
-python scripts/benchmark.py                             # 이 PC 속도 → docs/benchmark.json
-pytest -q
+uv run streamlit run app/streamlit_app.py                         # 웹앱
+uv run python scripts/analyze.py samples/demo_low_left.jpg --shots 10
+uv run python scripts/evaluate.py                                 # 공개 시험셋 + 해경 실사진(로컬) + 자세 합성 → docs/results.json
+uv run python scripts/benchmark.py                                # 이 PC 속도 → docs/benchmark.json
+uv run pytest -q
 ```
+
+해경 실사진과 정답(`data/kcg_real/`)은 저장소에 없다. 평가하려면 팀 공유 폴더에서 받아 같은 경로에 둔다.

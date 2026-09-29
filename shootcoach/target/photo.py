@@ -37,16 +37,17 @@ def _nms_px(holes: list[PxHole], min_dist: float) -> list[PxHole]:
 
 
 class PhotoHoleDetector:
-    def __init__(self, weights: str | Path = PHOTO_WEIGHTS, imgsz: int = 960, device=None):
+    def __init__(self, weights: str | Path = PHOTO_WEIGHTS, imgsz: int = 960, device=None, augment: bool = True):
         from ultralytics import YOLO
 
         self.model = YOLO(str(weights))
         self.imgsz = imgsz
         self.device = device
+        self.augment = augment        # 좌우 뒤집기·배율 TTA: 해경 실사진 F1 0.85 → 0.88 (약 2~3배 느림)
 
     def raw(self, image: np.ndarray, conf_floor: float = 0.05) -> list[PxHole]:
         """All candidates down to a low confidence (filtered later)."""
-        r = self.model.predict(image, conf=conf_floor, iou=0.6, imgsz=self.imgsz, device=self.device, verbose=False,
+        r = self.model.predict(image, conf=conf_floor, iou=0.6, imgsz=self.imgsz, device=self.device, augment=self.augment, verbose=False,
                                max_det=300)[0]
         out = []
         for (x1, y1, x2, y2), c in zip(r.boxes.xyxy.cpu().numpy(), r.boxes.conf.cpu().numpy()):

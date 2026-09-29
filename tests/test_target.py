@@ -28,6 +28,19 @@ def test_locate_without_markers_maps_holes_to_mm():
     assert np.median(err) < 5.0                    # mm (ring width 25 mm): affine approximation of a tilted photo
 
 
+def test_locate_ignores_shots_on_disc_edge():
+    """Dark holes just outside ring 7 used to merge with the black disc and drag the fit towards the group."""
+    rng = np.random.default_rng(11)
+    c = np.asarray(SPEC.center_mm)
+    r7 = SPEC.ring_radius_mm(SPEC.black_from_ring)
+    ang = np.deg2rad(np.linspace(20, 80, 8))
+    holes = c + np.column_stack([np.cos(ang), -np.sin(ang)]) * (r7 + rng.uniform(-6, 8, 8))[:, None]
+    rect = draw_holes(render_target(SPEC), holes * SPEC.px_per_mm, np.full(8, 4.5 * SPEC.px_per_mm), rng, backer="dark")
+    f = locate_target(rect, SPEC)
+    centre_err_mm = np.hypot(*(np.asarray(f.center_px) / SPEC.px_per_mm - c))
+    assert centre_err_mm < 2.0
+
+
 def test_locate_fails_without_target():
     try:
         locate_target(np.full((800, 600, 3), 255, np.uint8), SPEC)

@@ -153,8 +153,13 @@ def main():
     ap.add_argument("--real", default="data/kcg_real")
     ap.add_argument("--shots", type=int, default=None, help="장당 발수 (없으면 정답 개수를 발수로 사용)")
     ap.add_argument("--out", default="docs/results.json")
+    ap.add_argument("--weights", default=None, help="평가할 탄공 모델 (기본: models/hole_detector_photo.pt)")
     a = ap.parse_args()
-    det = get_photo_detector()
+    if a.weights:
+        from shootcoach.target.photo import PhotoHoleDetector
+        det = PhotoHoleDetector(a.weights)
+    else:
+        det = get_photo_detector()
     res = {"detector": type(det).__name__}
     if Path(a.public, "images", "test").exists() and hasattr(det, "raw"):
         res["public_test"] = eval_public(det, Path(a.public))

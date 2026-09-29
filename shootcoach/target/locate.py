@@ -36,6 +36,28 @@ class TargetFrame:
         return self.to_target_mm(pts_px) + np.asarray(spec.center_mm)
 
 
+def _refine_ellipse(pts: np.ndarray, ell, iters: int = 4):
+    """Refit on contour points that lie on the ellipse.
+
+    Holes on the edge of the black disc either bite into it (bright holes inside) or stick out of it
+    (dark holes just outside merge with the disc at a bright threshold). Both pull a plain or hull fit
+    towards the shots. Dropping points whose normalised radius is off, then refitting, removes both.
+    """
+    pts = pts.reshape(-1, 2).astype(np.float64)
+    for tol in np.linspace(0.08, 0.025, iters):
+        (cx, cy), (MA, ma), ang = ell
+        t = np.deg2rad(ang)
+        dx, dy = pts[:, 0] - cx, pts[:, 1] - cy
+        u = dx * np.cos(t) + dy * np.sin(t)
+        v = -dx * np.sin(t) + dy * np.cos(t)
+        rho = np.hypot(u / (MA / 2 + 1e-9), v / (ma / 2 + 1e-9))
+        keep = np.abs(rho - np.median(rho)) < tol
+        if keep.sum() < max(20, 0.3 * len(pts)):
+            break
+        ell = cv2.fitEllipse(pts[keep].astype(np.float32))
+    return ell
+
+
 def _candidate_discs(gray: np.ndarray):
     """Dark, filled, ellipse-shaped regions. Tries several thresholds and looks inside other regions too,
     so a dark wall or table behind the paper does not swallow the black aiming disc."""
@@ -61,6 +83,7 @@ def _candidate_discs(gray: np.ndarray):
             ratio = min(MA, ma) / max(MA, ma)
             if fill < 0.75 or ratio < 0.45:
                 continue
+            (cx, cy), (MA, ma), ang = _refine_ellipse(c, ((cx, cy), (MA, ma), ang))
             if cx - MA / 2 < -0.15 * MA or cy - ma / 2 < -0.15 * ma or cx + MA / 2 > w + 0.15 * MA or cy + ma / 2 > h + 0.15 * ma:
                 continue
             # 안쪽이 실제로 어두운지 (밝은 종이 영역을 뒤집어 잡은 경우 제외)

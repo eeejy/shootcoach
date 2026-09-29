@@ -17,8 +17,12 @@ from shootcoach.labeling import dataset_counts, draw_label_view, list_images, lo
 from shootcoach.target.detect import Hole, get_detector  # noqa: E402
 from shootcoach.target.markers import MarkerError  # noqa: E402
 
-st.set_page_config(page_title="탄공 라벨링", page_icon="🏷️", layout="wide")
-st.title("🏷️ 탄공 라벨링 (로컬)")
+from app.theme import apply_theme, brand_header  # noqa: E402
+
+st.set_page_config(page_title="BullsAI · 탄공 라벨링", layout="wide")
+apply_theme()
+brand_header("탄공 라벨링")
+st.title("탄공 라벨링 (로컬)")
 st.caption("해경 사진은 외부 라벨링 서비스에 올리지 않습니다. 모델이 먼저 찍고, 사람이 고칩니다.")
 
 configs = sorted((ROOT / "configs").glob("*.yaml"))
@@ -86,7 +90,7 @@ with c1:
         st.rerun()
 with c2:
     st.subheader(f"{path.name} · 탄공 {len(holes)}개")
-    st.caption("🟠 모델 제안 · 🟢 사람이 추가 — 이미지를 클릭하면 탄공이 추가됩니다.")
+    st.caption("모델이 제안한 탄공과 사람이 추가한 탄공이 함께 표시됩니다. 이미지를 클릭하면 탄공이 추가됩니다.")
     drop = st.multiselect("지울 번호 (오검출)", list(range(1, len(holes) + 1)))
     if st.button("선택 삭제") and drop:
         st.session_state["holes"] = [h for i, h in enumerate(holes, 1) if i not in set(drop)]
@@ -94,7 +98,7 @@ with c2:
     if st.button("마지막 추가 취소") and holes:
         holes.pop()
         st.rerun()
-    if st.button("💾 저장 후 다음", type="primary"):
+    if st.button("저장 후 다음", type="primary"):
         p = save_sample(rect, holes, SPEC, out, path.stem)
         st.success(f"저장: {p.relative_to(ROOT) if p.is_relative_to(ROOT) else p}")
         st.session_state["idx"] = min(len(imgs), idx + 2)

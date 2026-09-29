@@ -1,4 +1,4 @@
-"""취향저격 — AI 사격 교정 MVP (로컬 웹앱).
+"""BullsAI — AI 사격 교정 MVP (로컬 웹앱).
 
     streamlit run app/streamlit_app.py
 같은 와이파이의 휴대폰에서 http://<이 PC IP>:8501 로 접속해 사진을 올릴 수 있다.
@@ -33,7 +33,10 @@ from shootcoach.target.detect import ClassicHoleDetector, get_detector  # noqa: 
 from shootcoach.target.markers import MarkerError  # noqa: E402
 from shootcoach.target.template import save_printable  # noqa: E402
 
-st.set_page_config(page_title="취향저격 · AI 사격 교정", page_icon="🎯", layout="wide")
+from app.theme import apply_theme, brand_header  # noqa: E402
+
+st.set_page_config(page_title="BullsAI · AI 사격 교정", layout="wide")
+apply_theme()
 SPEC = load_target_spec()
 
 
@@ -49,7 +52,8 @@ def stage1_from_dict(d: dict) -> Stage1Result:
 
 
 with st.sidebar:
-    st.header("설정")
+    brand_header()
+    st.markdown("###### 분석 설정")
     hand = st.radio("주로 쓰는 손", ["right", "left"], format_func=lambda x: "오른손" if x == "right" else "왼손")
     distance = st.number_input("사격 거리 (m)", 3.0, 50.0, 15.0, 1.0)
     click = st.number_input("조준기 1클릭 값 (mm @10m, 모르면 0)", 0.0, 50.0, 0.0, 0.5)
@@ -58,13 +62,13 @@ with st.sidebar:
     shooter = st.text_input("사수 프로필 (캘리브레이션, 비우면 사용 안 함)", "")
     use_vlm = st.checkbox("로컬 VLM으로 설명 문장 생성", value=False)
     if use_vlm:
-        st.caption("✅ Ollama 연결됨" if vlm_available() else "⚠️ Ollama 미실행 → 템플릿 문장 사용")
+        st.caption("Ollama 연결됨" if vlm_available() else "Ollama 미실행 — 템플릿 문장 사용")
     st.divider()
-    st.caption("🔒 모든 분석은 이 PC 안에서만 처리됩니다. 사진·영상은 외부로 전송되지 않습니다.")
+    st.caption("모든 분석은 이 PC 안에서만 처리됩니다. 사진·영상은 외부로 전송되지 않습니다.")
 
-st.title("🎯 취향저격 — AI 사격 교정")
-st.caption("1단계: 표적지만으로 원인 후보 + 교정 가이드 → 2단계: 자세 영상으로 후보 중 하나를 확정")
-tab1, tab2, tab3, tab4 = st.tabs(["① 표적지 분석", "② 자세 영상", "③ 설명 문장", "🖨️ 표적지 인쇄"])
+st.title("AI 사격 교정")
+st.caption("1단계: 표적지만으로 원인 후보와 교정 가이드를 제시합니다. 2단계: 자세 영상으로 후보 중 하나를 확정합니다.")
+tab1, tab2, tab3, tab4 = st.tabs(["표적지 분석", "자세 영상", "설명 문장", "표적지 인쇄"])
 
 with tab1:
     c1, c2 = st.columns([1, 1])
@@ -112,7 +116,7 @@ with tab1:
         for n in s1["notes"]:
             st.info(n)
         if s1["zero_adjust"]:
-            st.success("🔧 " + s1["zero_adjust"]["text_ko"])
+            st.success(s1["zero_adjust"]["text_ko"])
         for i, c in enumerate(s1["candidates"], 1):
             with st.expander(f"후보 {i}. {c['cause_ko']}  (가중치 {c['score']:.2f})", expanded=i == 1):
                 st.write(c["guidance_ko"])
@@ -121,7 +125,7 @@ with tab1:
                            + (f" · 자세 영상: {c['observable_note']}" if c["observable_note"] else ""))
         st.download_button("리포트 JSON 받기", to_json(rep), "report.json", "application/json")
         if shooter.strip():
-            with st.expander("🧪 진단 세션으로 기록 (캘리브레이션)"):
+            with st.expander("진단 세션으로 기록 (캘리브레이션)"):
                 st.caption("사수가 일부러 특정 오류를 내며 쏜 표적지라면, 그 오류가 이 사수에게서 어느 방향으로 나타나는지 기록합니다.")
                 causes = load_causes()
                 cid = st.selectbox("일부러 낸 오류", sorted(causes), format_func=lambda k: causes[k].cause_ko)
@@ -135,7 +139,7 @@ with tab1:
 with tab2:
     rep = st.session_state.get("report")
     if not rep:
-        st.info("먼저 ① 표적지 분석을 실행하세요.")
+        st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
     else:
         st.write("측면(사수 옆 2m, 높이 1.2m) 삼각대 촬영 영상을 올리세요. 총성이 녹음되어 있으면 격발 시점을 더 정확히 찾습니다.")
         vid = st.file_uploader("자세 영상", type=["mp4", "mov", "m4v"])
@@ -179,7 +183,7 @@ with tab2:
 with tab3:
     rep = st.session_state.get("report")
     if not rep:
-        st.info("먼저 ① 표적지 분석을 실행하세요.")
+        st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
     elif st.button("설명 문장 만들기", type="primary"):
         if use_vlm:
             with st.spinner("로컬 VLM 생성 중…"):

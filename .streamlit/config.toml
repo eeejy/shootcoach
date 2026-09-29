@@ -7,3 +7,12 @@ maxUploadSize = 50          # MB
 
 [browser]
 gatherUsageStats = false    # Streamlit 사용 통계 외부 전송 끔 (로컬 원칙)
+
+# BullsAI 디자인 시스템 — zinc 중립 + 딥블루 accent (AX360 톤)
+[theme]
+base = "light"
+primaryColor = "#1d4ed8"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#fafafa"
+textColor = "#18181b"
+font = "sans serif"

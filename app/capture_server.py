@@ -36,7 +36,7 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 # module with no token. The page receives it in the URL (?t=...) and sends it back as a header.
 TOKEN: str | None = os.environ.get("SHOOTCOACH_TOKEN") or None
 POSITION_KO = {0: "왼쪽 위", 1: "오른쪽 위", 2: "오른쪽 아래", 3: "왼쪽 아래"}
-app = FastAPI(title="취향저격 촬영 가이드")
+app = FastAPI(title="BullsAI 촬영 가이드")
 _detector = None
 
 

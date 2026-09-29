@@ -128,7 +128,9 @@ def diagnose_stage2(stage1: Stage1Result, seq: KeypointSeq, shot_times: list[flo
         elif any(s.present for s in obs):
             best = max((s for s in obs if s.present), key=lambda s: s.strength)
             status = "confirmed"
-            conf = min(0.99, c.score * 0.4 + 0.6 * min(1.0, best.strength / 2))
+            n_ok = sum(1 for s in obs if s.present)
+            # 뒷받침하는 신호가 많을수록(증거 기반 다중 추론) 신뢰도가 높다
+            conf = min(0.99, c.score * 0.35 + 0.5 * min(1.0, best.strength / 2) + 0.12 * (n_ok - 1) + 0.05 * n_ok / len(obs))
             ev = [f"{s.name_ko}: 강도 {s.strength:.1f} ({s.shots_present}/{s.shots_total}발)" for s in obs if s.present]
         else:
             status, conf = "ruled_out", c.score * 0.2

@@ -1,10 +1,12 @@
-"""BullsAI — AI 사격 교정 MVP (로컬 웹앱).
+"""BullsAI — AI 사격 교정 (로컬 웹앱).
 
     streamlit run app/streamlit_app.py
-같은 와이파이의 휴대폰에서 http://<이 PC IP>:8501 로 접속해 사진을 올릴 수 있다.
+마커 없이 표적지 사진을 분석한다. AI 검출 결과는 교관이 사진을 눌러 바로 고칠 수 있다.
 """
 from __future__ import annotations
 
+import datetime as dt
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -13,68 +15,94 @@ import cv2
 import numpy as np
 import pandas as pd
 import streamlit as st
+from streamlit_image_coordinates import streamlit_image_coordinates
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from shootcoach.config import load_target_spec  # noqa: E402
-from shootcoach.diagnosis.calibration import ShooterProfile, apply_profile  # noqa: E402
+from shootcoach.diagnosis.calibration import ShooterProfile as CalProfile  # noqa: E402
+from shootcoach.diagnosis.calibration import apply_profile  # noqa: E402
 from shootcoach.diagnosis.rules import load_causes  # noqa: E402
-from shootcoach.diagnosis.stage1 import diagnose_stage1  # noqa: E402
-from shootcoach.target.scoring import group_stats  # noqa: E402
-from shootcoach.diagnosis.stage1 import Candidate, Stage1Result, ZeroAdjust  # noqa: E402
+from shootcoach.diagnosis.stage1 import Candidate, ShooterProfile, Stage1Result, ZeroAdjust, diagnose_stage1  # noqa: E402
 from shootcoach.diagnosis.stage2 import diagnose_stage2  # noqa: E402
 from shootcoach.explain.vlm import template_explanation, vlm_available, vlm_explanation  # noqa: E402
-from shootcoach.pipeline import analyze_posture, analyze_target, to_json  # noqa: E402
+from shootcoach.pipeline import analyze_posture, analyze_target, count_holes, default_spec, get_photo_detector, to_json  # noqa: E402
 from shootcoach.pose.features import arm_series  # noqa: E402
 from shootcoach.pose.render import key_frames  # noqa: E402
 from shootcoach.pose.simulate import Faults, simulate_side_view  # noqa: E402
-from shootcoach.target.detect import ClassicHoleDetector, get_detector  # noqa: E402
-from shootcoach.target.markers import MarkerError  # noqa: E402
-from shootcoach.target.template import save_printable  # noqa: E402
+from shootcoach.target.detect import ClassicHoleDetector, Hole  # noqa: E402
+from shootcoach.target.locate import TargetNotFound  # noqa: E402
+from shootcoach.target.scoring import group_stats  # noqa: E402
 
-from app.theme import apply_theme, brand_header, page_icon, section, sidebar_nav  # noqa: E402
+from app.theme import apply_theme, brand_header, page_icon, section  # noqa: E402
 
 st.set_page_config(page_title="BullsAI · AI 사격 교정", page_icon=page_icon(), layout="wide")
 apply_theme()
-SPEC = load_target_spec()
+SPEC = default_spec()
+FEEDBACK = ROOT / "profiles" / "instructor_feedback.jsonl"
 
 
 @st.cache_resource
 def detector(kind: str):
-    return ClassicHoleDetector() if kind == "classic" else get_detector("auto")
+    return ClassicHoleDetector() if kind == "classic" else get_photo_detector()
 
 
 def stage1_from_dict(d: dict) -> Stage1Result:
     return Stage1Result(d["shape"], d["shape_ko"], d["sector"], d["sector_ko"], d["handedness"],
                         [Candidate(**c) for c in d["candidates"]],
-                        ZeroAdjust(**d["zero_adjust"]) if d["zero_adjust"] else None, d["notes"])
+                        ZeroAdjust(**d["zero_adjust"]) if d["zero_adjust"] else None, d["notes"], d.get("components", {}))
 
 
 with st.sidebar:
     brand_header()
-    sidebar_nav()
     section("SHOOTER")
-    hand = st.radio("주로 쓰는 손", ["right", "left"], format_func=lambda x: "오른손" if x == "right" else "왼손")
+    hand = st.radio("주로 쓰는 손", ["right", "left"], format_func=lambda x: "오른손" if x == "right" else "왼손", horizontal=True)
+    hand_size = st.select_slider("손 크기", ["small", "medium", "large"], "medium",
+                                 format_func=lambda x: {"small": "작음", "medium": "보통", "large": "큼"}[x])
+    finger = st.select_slider("손가락 길이", ["short", "normal", "long"], "normal",
+                              format_func=lambda x: {"short": "짧음", "normal": "보통", "long": "김"}[x])
+    fatigue = st.toggle("피로함", False)
     section("RANGE")
-    distance = st.number_input("사격 거리 (m)", 3.0, 50.0, 10.0, 1.0)
+    c1, c2 = st.columns(2)
+    distance = c1.number_input("거리 (m)", 3.0, 50.0, 10.0, 1.0)
+    shots = c2.number_input("발수", 1, 30, 10, 1)
+    section("PRE-CHECK")
+    zero_ok = st.radio("총기 영점", ["unknown", "yes", "no"], horizontal=True,
+                       format_func=lambda x: {"unknown": "모름", "yes": "확인됨", "no": "안 됨"}[x])
+    grip_fit = st.radio("그립 크기", ["ok", "too_large", "too_small"], horizontal=True,
+                        format_func=lambda x: {"ok": "맞음", "too_large": "손에 큼", "too_small": "손에 작음"}[x])
     section("ENGINE")
-    det_kind = st.selectbox("탄공 검출기", ["auto", "classic"],
-                            format_func=lambda x: "딥러닝 (YOLO)" if x == "auto" else "전통 영상처리 (대체)")
-    shooter = st.text_input("사수 프로필", "")
+    det_kind = st.selectbox("탄공 검출", ["auto", "classic"],
+                            format_func=lambda x: "AI 모델" if x == "auto" else "영상처리 (대체)")
+    shooter = st.text_input("사수 이름 (기록용, 선택)", "")
     use_vlm = st.checkbox("AI 설명 문장", value=False)
     if use_vlm:
         st.caption("연결됨" if vlm_available() else "Ollama 꺼짐 — 기본 문장 사용")
 
-tab1, tab2, tab3, tab4 = st.tabs(["표적지 분석", "자세 영상", "설명 문장", "표적지 인쇄"])
+PROFILE = ShooterProfile(hand_size, finger, "high" if fatigue else "low", zero_ok, grip_fit)
+
+
+def run_analysis(img: np.ndarray, holes: list[Hole] | None = None) -> None:
+    res = analyze_target(img, SPEC, hand, distance, None, detector(det_kind), expected_shots=int(shots), holes_override=holes)
+    st_ = group_stats(res.holes, SPEC)
+    s1 = diagnose_stage1(st_, SPEC, hand, distance, profile=PROFILE)
+    if shooter.strip():
+        prof_path = ROOT / "profiles" / f"{shooter.strip()}.json"
+        if prof_path.exists():
+            s1 = apply_profile(s1, st_, CalProfile.load(prof_path))
+    res.report["stage1"] = s1.as_dict()
+    st.session_state.update(report=res.report, holes=res.holes, overlay=res.overlay, image=img)
+    st.session_state.pop("stage2_seq", None)
+
+
+tab1, tab2, tab3 = st.tabs(["표적지 분석", "자세 영상", "설명 문장"])
 
 with tab1:
     demos = sorted(p.name for p in (ROOT / "samples").glob("demo_*.jpg"))
     i1, i2, i3 = st.columns([5, 4, 1.4], vertical_alignment="bottom")
     up = i1.file_uploader("표적지 사진", type=["jpg", "jpeg", "png"])
     demo = i2.selectbox("또는 데모 사진", ["(선택 안 함)"] + demos)
-    go = i3.button("분석", type="primary", width="stretch")
-    if go:
+    if i3.button("분석", type="primary", width="stretch"):
         img = None
         if up is not None:
             img = cv2.imdecode(np.frombuffer(up.read(), np.uint8), cv2.IMREAD_COLOR)
@@ -84,57 +112,94 @@ with tab1:
             st.warning("사진을 올리거나 데모 사진을 고르세요.")
         else:
             try:
-                res = analyze_target(img, SPEC, hand, distance, None, detector(det_kind))
-                if shooter.strip():
-                    prof_path = ROOT / "profiles" / f"{shooter.strip()}.json"
-                    if prof_path.exists():
-                        st_ = group_stats(res.holes, SPEC)
-                        s1 = apply_profile(diagnose_stage1(st_, SPEC, hand, distance, None), st_,
-                                           ShooterProfile.load(prof_path))
-                        res.report["stage1"] = s1.as_dict()
-                st.session_state["report"] = res.report
-                st.session_state["holes"] = res.holes
-                st.session_state["overlay"] = res.overlay
-                st.session_state.pop("stage2_seq", None)
-            except MarkerError as e:
-                st.error(str(e))
+                run_analysis(img)
+                st.session_state["click"] = None
+                st.session_state.pop("count_only", None)
+            except TargetNotFound as e:
+                st.session_state.pop("report", None)
+                try:
+                    st.session_state["count_only"] = count_holes(img, detector(det_kind), int(shots))
+                except TargetNotFound:
+                    st.error(str(e))
     rep = st.session_state.get("report")
-    if not rep:
-        st.caption("표적지 사진을 올리거나 데모 사진을 고른 뒤 분석을 누르세요.")
+    co = st.session_state.get("count_only")
+    if co and not rep:
+        st.warning("원형 표적을 찾지 못해 **탄공 개수만** 셉니다. 속사(하반신) 표적의 영역 채점은 규정을 받은 뒤 지원합니다.")
+        l, r = st.columns([5, 6], gap="large")
+        l.image(cv2.cvtColor(co["overlay"], cv2.COLOR_BGR2RGB), width="stretch")
+        r.metric(f"탄 수 (기준 {co['expected'] or '-'})", co["n"])
+    elif not rep:
+        st.caption("표적지 사진을 올리거나 데모 사진을 고른 뒤 분석을 누르세요. 마커는 필요 없습니다.")
     else:
         g, s1 = rep["group"], rep["stage1"]
         left, right = st.columns([5, 6], gap="large")
         with left:
-            st.image(cv2.cvtColor(st.session_state["overlay"], cv2.COLOR_BGR2RGB), width="stretch")
-            st.download_button("리포트 JSON", to_json(rep), "report.json", "application/json", width="stretch")
+            view = st.session_state["overlay"]
+            send_w = min(900, view.shape[1])
+            small = cv2.resize(view, (send_w, int(view.shape[0] * send_w / view.shape[1])))
+            click = streamlit_image_coordinates(cv2.cvtColor(small, cv2.COLOR_BGR2RGB), width="stretch", key="target_view")
+            if click and click != st.session_state.get("click"):
+                st.session_state["click"] = click
+                k = view.shape[1] / (click.get("width") or send_w) / SPEC.px_per_mm      # 표시 px → 종이 mm
+                x_mm, y_mm = click["x"] * k, click["y"] * k
+                holes = list(st.session_state["holes"])
+                near = [i for i, h in enumerate(holes) if np.hypot(h.x_mm - x_mm, h.y_mm - y_mm) <= max(h.r_mm * 1.4, 6)]
+                if near:
+                    holes.pop(near[0])                                         # 누른 곳에 탄공 → 삭제
+                else:
+                    holes.append(Hole(x_mm, y_mm, SPEC.bullet_diameter_mm / 2, conf=1.0))   # 빈 곳 → 추가
+                run_analysis(st.session_state["image"], holes)
+                st.rerun()
+            st.caption("사진을 누르면 고칠 수 있습니다 · 빈 곳 = 탄공 추가 · 탄공 = 삭제")
+            b1, b2 = st.columns(2)
+            if b1.button("AI 결과로 되돌리기", width="stretch"):
+                run_analysis(st.session_state["image"])
+                st.rerun()
+            b2.download_button("리포트 JSON", to_json(rep), "report.json", "application/json", width="stretch")
         with right:
-            m = st.columns(4)
-            m[0].metric("탄 수", g["n"])
+            m = st.columns(3)
+            m[0].metric(f"탄 수 (기준 {rep.get('expected_shots') or '-'})", g["n"])
             m[1].metric("총점", g["total_score"])
-            m[2].metric("오프셋 mm", f"{g['offset_mm']:.0f}")
-            m[3].metric("반경 mm", f"{g['mean_radius_mm']:.0f}")
+            m[2].metric("반경 mm", f"{g['mean_radius_mm']:.0f}")
             st.subheader(f"{s1['shape_ko']} · {s1['sector_ko']}")
+            for n in rep.get("notes", []) + s1["notes"]:
+                st.info(n)
             if s1["zero_adjust"]:
                 st.success(s1["zero_adjust"]["text_ko"])
-            for n in s1["notes"]:
-                st.info(n)
             for i, c in enumerate(s1["candidates"], 1):
                 with st.expander(f"{i}. {c['cause_ko']}  ·  {c['score']:.2f}", expanded=i == 1):
                     st.write(c["guidance_ko"])
-                    st.write(f"**교정 훈련:** {c['drill_ko']}")
-                    st.caption(f"근거: {', '.join(c['sources'])} · 규칙 {', '.join(c['rule_ids'])}"
-                               + (f" · 자세 영상: {c['observable_note']}" if c["observable_note"] else ""))
-            if shooter.strip():
-                with st.expander("진단 세션으로 기록 (캘리브레이션)"):
-                    causes = load_causes()
-                    cid = st.selectbox("일부러 낸 오류", sorted(causes), format_func=lambda k: causes[k].cause_ko)
-                    if st.button("이 표적지를 기록"):
-                        prof_path = ROOT / "profiles" / f"{shooter.strip()}.json"
-                        prof = ShooterProfile.load(prof_path) if prof_path.exists() else ShooterProfile(shooter.strip(), hand)
-                        prof.add_session(cid, group_stats(st.session_state["holes"], SPEC))
-                        prof.save(prof_path)
-                        st.success(f"기록했습니다 → profiles/{shooter.strip()}.json")
-            st.caption(f"처리 {rep['timings']['total_s'] * 1000:.0f} ms")
+                    if c.get("checklist"):
+                        st.markdown("**현장 확인**")
+                        for j, item in enumerate(c["checklist"]):
+                            st.checkbox(item, key=f"chk_{c['cause_id']}_{j}")
+                    if c.get("drill_ko"):
+                        st.write(f"**교정 훈련:** {c['drill_ko']}")
+            if s1["candidates"]:
+                with st.expander("교관 판정 기록"):
+                    opts = [c["cause_id"] for c in s1["candidates"]] + ["other"]
+                    names = {c["cause_id"]: c["cause_ko"] for c in s1["candidates"]} | {"other": "목록에 없음"}
+                    verdict = st.radio("실제 원인", opts, format_func=lambda k: names[k])
+                    memo = st.text_input("메모", "")
+                    if st.button("판정 저장"):
+                        FEEDBACK.parent.mkdir(exist_ok=True)
+                        with open(FEEDBACK, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"time": dt.datetime.now().isoformat(timespec="seconds"), "shooter": shooter,
+                                                "ai_top": s1["candidates"][0]["cause_id"],
+                                                "ai_top3": [c["cause_id"] for c in s1["candidates"][:3]],
+                                                "instructor": verdict, "memo": memo, "shape": s1["shape"],
+                                                "center_mm": g["center_mm"], "n": g["n"]}, ensure_ascii=False) + "\n")
+                        st.success("저장했습니다 (이 PC에만). AI 진단 정확도 집계에 쓰입니다.")
+                    if shooter.strip():
+                        causes = load_causes()
+                        cid = st.selectbox("진단 세션 기록: 일부러 낸 오류", sorted(causes), format_func=lambda k: causes[k].cause_ko)
+                        if st.button("이 표적지를 진단 세션으로 기록"):
+                            prof_path = ROOT / "profiles" / f"{shooter.strip()}.json"
+                            prof = CalProfile.load(prof_path) if prof_path.exists() else CalProfile(shooter.strip(), hand)
+                            prof.add_session(cid, group_stats(st.session_state["holes"], SPEC))
+                            prof.save(prof_path)
+                            st.success(f"기록했습니다 → profiles/{shooter.strip()}.json")
+            st.caption(f"처리 {rep['timings']['total_s'] * 1000:.0f} ms · {rep['detector']}")
 
 with tab2:
     rep = st.session_state.get("report")
@@ -178,9 +243,9 @@ with tab2:
                     st.line_chart(pd.DataFrame({"팔뚝 각도(°)": pitch}, index=np.round(seq.t, 2)), height=200, color="#cf3a30")
             with right:
                 if seq is not None and s2["shot_times"]:
-                    f = key_frames(seq, s2["shot_times"][0])
+                    frames = key_frames(seq, s2["shot_times"][0])
                     cols = st.columns(3)
-                    for col, im, cap in zip(cols, f, ["0.3초 전", "격발 직전", "0.5초 후"]):
+                    for col, im, cap in zip(cols, frames, ["0.3초 전", "격발 직전", "0.5초 후"]):
                         col.image(cv2.cvtColor(im, cv2.COLOR_BGR2RGB), caption=cap, width="stretch")
                 for n in s2.get("notes", []):
                     st.caption(n)
@@ -191,21 +256,10 @@ with tab3:
         st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
     elif st.button("설명 문장 만들기", type="primary"):
         if use_vlm:
-            with st.spinner("로컬 VLM 생성 중…"):
+            with st.spinner("로컬 AI 생성 중…"):
                 ex = vlm_explanation(rep, [st.session_state["overlay"]])
         else:
             ex = {"text": template_explanation(rep), "source": "template", "latency_s": 0}
         st.write(ex["text"])
-        st.caption(f"출처: {'로컬 VLM ' + ex.get('model', '') if ex['source'] == 'vlm' else '템플릿'} · {ex['latency_s']}초"
+        st.caption(f"출처: {'로컬 AI ' + ex.get('model', '') if ex['source'] == 'vlm' else '기본 문장'} · {ex['latency_s']}초"
                    + (f" · 오류: {ex['error']}" if ex.get("error") else ""))
-
-with tab4:
-    @st.cache_resource
-    def printable():
-        return save_printable(SPEC, Path(tempfile.gettempdir()) / "bullsai_target")   # 저장소 파일을 덮어쓰지 않음
-
-    png, pdf = printable()
-    c1, c2 = st.columns([1, 2])
-    c1.image(str(png), width="stretch")
-    c2.caption("A4 · 배율 100%로 인쇄")
-    c2.download_button("PDF 받기", pdf.read_bytes(), pdf.name, "application/pdf", type="primary")

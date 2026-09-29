@@ -1,154 +1,170 @@
-"""Evaluate the MVP on held-out synthetic data (photos with perspective + lighting, never seen in training).
+"""성능 평가 (정직한 수치용).
 
-    python scripts/evaluate.py --n 200 --out docs/results.json
+    python scripts/evaluate.py                      # 공개 테스트셋 + 해경 실사진(정답 있으면) + 자세 합성 시나리오
+    python scripts/evaluate.py --real data/kcg_real  # 해경 실사진 폴더 (이미지 + labels/*.txt YOLO 형식 정답)
+
+- 공개 테스트셋: data/real_v1 test split (학습에 쓰지 않은 사진)
+- 해경 실사진: 사진마다 같은 이름의 YOLO 라벨(.txt). 표적 찾기 성공률, 탄공 정밀도/재현율, 발별 점수 일치,
+  발수 보정 전후 비교를 낸다.
 """
 import argparse
 import json
-import time
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-from shootcoach.config import load_target_spec
 from shootcoach.diagnosis.stage1 import diagnose_stage1
 from shootcoach.diagnosis.stage2 import diagnose_stage2
+from shootcoach.pipeline import default_spec, detect_holes_px, get_photo_detector
 from shootcoach.pose.simulate import Faults, simulate_side_view
-from shootcoach.synth import ShotGroupSpec, draw_holes, sample_group, simulate_photo
-from shootcoach.target.detect import ClassicHoleDetector, Hole, YoloHoleDetector
-from shootcoach.target.markers import MarkerError, rectify
+from shootcoach.target.detect import Hole
+from shootcoach.target.locate import TargetNotFound, locate_target
 from shootcoach.target.scoring import group_stats, score_hole, to_target_xy
-from shootcoach.target.template import render_target
 
 
-def match(gt, pred, tol):
+def read_yolo(lab: Path, w: int, h: int) -> np.ndarray:
+    pts = []
+    if lab.exists():
+        for l in lab.read_text().split("\n"):
+            p = l.split()
+            if len(p) == 5:
+                pts.append((float(p[1]) * w, float(p[2]) * h, (float(p[3]) * w + float(p[4]) * h) / 4))
+    return np.array(pts).reshape(-1, 3)
+
+
+def match(gt: np.ndarray, pred: np.ndarray, tol_factor: float = 1.0):
+    """Greedy one-to-one match within tol_factor × GT radius (min 3 px)."""
     used, pairs = set(), []
-    for gi, g in enumerate(gt):
+    for gi, (gx, gy, gr) in enumerate(gt):
         if not len(pred):
             break
-        d = np.hypot(*(pred - g).T)
+        d = np.hypot(pred[:, 0] - gx, pred[:, 1] - gy)
         for pi in np.argsort(d):
             if pi in used:
                 continue
-            if d[pi] <= tol:
+            if d[pi] <= max(3.0, tol_factor * gr * 1.5):
                 used.add(pi)
-                pairs.append((gi, pi, d[pi]))
+                pairs.append((gi, int(pi)))
             break
     return pairs
 
 
-def random_group(rng):
-    kind = rng.choice(["tight", "offset", "scatter", "vstring", "hstring"])
-    n = int(rng.integers(5, 11))
-    off = tuple(rng.normal(0, 18, 2)) if kind in ("offset", "scatter") else tuple(rng.normal(0, 2, 2))
-    sig = {"tight": (4, 4), "offset": (4, 4), "scatter": (14, 14), "vstring": (3.5, 18), "hstring": (18, 3.5)}[kind]
-    sig = tuple(np.asarray(sig) * rng.uniform(0.85, 1.15, 2))
-    return ShotGroupSpec(n, off, sig)
+def prf(tp, fp, fn):
+    p = tp / max(1, tp + fp)
+    r = tp / max(1, tp + fn)
+    return {"precision": round(p, 3), "recall": round(r, 3), "f1": round(2 * p * r / max(1e-9, p + r), 3), "tp": tp, "fp": fp, "fn": fn}
 
 
-def eval_target(spec, n, seed):
-    rng = np.random.default_rng(seed)
-    dets = {"yolo": YoloHoleDetector(), "classic": ClassicHoleDetector()}
-    agg = {k: {"tp": 0, "fp": 0, "fn": 0, "err": [], "score_ok": 0, "score_n": 0, "shape_ok": 0, "t": []} for k in dets}
-    rect_fail, rect_t, reproj = 0, [], []
-    tol = spec.bullet_diameter_mm / 2
-    for i in range(n):
-        g = random_group(rng)
-        holes = sample_group(spec, g, rng)
-        radii = np.full(len(holes), spec.bullet_diameter_mm / 2) * rng.uniform(0.9, 1.05, len(holes))
-        rect = draw_holes(render_target(spec), holes * spec.px_per_mm, radii * spec.px_per_mm, rng)
-        photo, _ = simulate_photo(rect, rng, max_tilt=float(rng.uniform(0.05, 0.22)))
-        t0 = time.perf_counter()
-        try:
-            r = rectify(photo, spec)
-        except MarkerError:
-            rect_fail += 1
+def eval_public(det, root: Path):
+    tp = fp = fn = 0
+    imgs = sorted((root / "images" / "test").glob("*"))
+    for img_p in imgs:
+        im = cv2.imread(str(img_p))
+        if im is None:
             continue
-        rect_t.append(time.perf_counter() - t0)
-        reproj.append(r.reprojection_mm)
-        gt_holes = [Hole(x, y, spec.bullet_diameter_mm / 2) for x, y in holes]
-        gt_shape = group_stats(gt_holes, spec).shape
-        gt_scores = [score_hole(float(np.hypot(*p)), spec) for p in to_target_xy(gt_holes, spec)]
-        for name, det in dets.items():
-            t1 = time.perf_counter()
-            pred = det.detect(r.image, spec)
-            agg[name]["t"].append(time.perf_counter() - t1)
-            P = np.array([[h.x_mm, h.y_mm] for h in pred]).reshape(-1, 2)
-            pairs = match(holes, P, tol)
-            a = agg[name]
-            a["tp"] += len(pairs)
-            a["fp"] += len(P) - len(pairs)
-            a["fn"] += len(holes) - len(pairs)
-            a["err"] += [d for _, _, d in pairs]
-            pred_scores = [score_hole(float(np.hypot(*p)), spec) for p in to_target_xy(pred, spec)]
-            for gi, pi, _ in pairs:
-                a["score_n"] += 1
-                a["score_ok"] += int(gt_scores[gi] == pred_scores[pi])
-            a["shape_ok"] += int(group_stats(pred, spec).shape == gt_shape)
-    n_ok = n - rect_fail
-    out = {"n_photos": n, "rectify_fail": rect_fail, "rectify_ms_mean": round(1000 * float(np.mean(rect_t)), 1),
-           "reprojection_mm_mean": round(float(np.mean(reproj)), 3), "detectors": {}}
-    for name, a in agg.items():
-        p = a["tp"] / max(1, a["tp"] + a["fp"])
-        rc = a["tp"] / max(1, a["tp"] + a["fn"])
-        out["detectors"][name] = {
-            "precision": round(p, 3), "recall": round(rc, 3), "f1": round(2 * p * rc / max(1e-9, p + rc), 3),
-            "loc_err_mm_mean": round(float(np.mean(a["err"])), 2) if a["err"] else None,
-            "score_exact_acc": round(a["score_ok"] / max(1, a["score_n"]), 3),
-            "shape_acc": round(a["shape_ok"] / max(1, n_ok), 3),
-            "detect_ms_mean": round(1000 * float(np.mean(a["t"])), 1),
-        }
+        h, w = im.shape[:2]
+        gt = read_yolo(root / "labels" / "test" / (img_p.stem + ".txt"), w, h)
+        pred, _ = det.detect(im, None)
+        P = np.array([[q.x, q.y] for q in pred]).reshape(-1, 2)
+        pairs = match(gt, P)
+        tp += len(pairs)
+        fp += len(P) - len(pairs)
+        fn += len(gt) - len(pairs)
+    return {"images": len(imgs), **prf(tp, fp, fn)}
+
+
+def eval_real(det, folder: Path, spec, shots: int | None):
+    rows = []
+    agg = {"raw": [0, 0, 0], "count": [0, 0, 0]}
+    score_ok = score_n = located = 0
+    imgs = sorted(p for p in folder.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
+    for img_p in imgs:
+        im = cv2.imread(str(img_p))
+        h, w = im.shape[:2]
+        gt = read_yolo(folder / "labels" / (img_p.stem + ".txt"), w, h)
+        try:
+            frame = locate_target(im, spec)
+            located += 1
+        except TargetNotFound:
+            rows.append({"image": img_p.name, "located": False})
+            continue
+        res = {"image": img_p.name, "located": True, "gt": len(gt)}
+        n_exp = shots or len(gt)
+        for mode, expected in (("raw", None), ("count", n_exp)):
+            pred, log = detect_holes_px(det, im, frame, spec, expected)
+            P = np.array([[q.x, q.y] for q in pred]).reshape(-1, 2)
+            pairs = match(gt, P)
+            a = agg[mode]
+            a[0] += len(pairs); a[1] += len(P) - len(pairs); a[2] += len(gt) - len(pairs)
+            res[mode] = {"found": len(P), "tp": len(pairs)}
+            if mode == "count":
+                g_mm = frame.paper_mm(gt[:, :2], spec) if len(gt) else np.zeros((0, 2))
+                p_mm = frame.paper_mm(P, spec) if len(P) else np.zeros((0, 2))
+                gs = [score_hole(float(np.hypot(*v)), spec) for v in to_target_xy([Hole(x, y, 4.5) for x, y in g_mm], spec)]
+                ps = [score_hole(float(np.hypot(*v)), spec) for v in to_target_xy([Hole(x, y, 4.5) for x, y in p_mm], spec)]
+                for gi, pi in pairs:
+                    score_n += 1
+                    score_ok += int(gs[gi] == ps[pi])
+                res["total_gt"], res["total_pred"] = int(sum(gs)), int(sum(ps))
+        rows.append(res)
+    out = {"images": len(imgs), "located": located,
+           "detect_raw": prf(*agg["raw"]), "detect_with_count_correction": prf(*agg["count"]),
+           "score_exact_acc": round(score_ok / max(1, score_n), 3), "per_image": rows}
     return out
 
 
-FAULT_CASES = {
-    # stage-1 group (offset, sigma), injected posture fault, expected stage-2 verdict
-    "jerking+dip": ((-22, -22), (13, 13), Faults(dip_deg=4), "jerking"),
+FAULT_CASES = {  # stage-1 group (A4 synthetic, mm), injected posture fault, expected stage-2 verdict
+    "low-left + muzzle dip": ((-22, -22), (13, 13), Faults(dip_deg=4), {"L1", "L2", "L3"}),   # 측면 영상으로는 하방 원인 3종 구분 어려움
     "low-left, clean posture": ((-22, -22), (13, 13), Faults(), None),
-    "heeling+up": ((22, 22), (13, 13), Faults(heel_deg=4, shrug=0.02), {"heeling", "anticipation_high"}),
-    "low+early drop": ((0, -24), (13, 13), Faults(early_drop=0.12), "follow_through"),
-    "low+dip": ((0, -24), (13, 13), Faults(dip_deg=4), "anticipation_low"),
-    "vertical+breath": ((0, 0), (4, 22), Faults(breath_amp=0.03), "breathing"),
-    "vertical, clean": ((0, 0), (4, 22), Faults(), None),
+    "high-right + muzzle up": ((22, 22), (13, 13), Faults(heel_deg=4, shrug=0.02), {"H1", "H2", "H4"}),
+    "high + early drop": ((0, 24), (13, 13), Faults(early_drop=0.12), {"H4"}),
+    "vertical + breath": ((0, 0), (2.5, 16), Faults(breath_amp=0.03), {"S1"}),
+    "vertical, clean": ((0, 0), (2.5, 16), Faults(), None),
 }
 
 
-def sunflower(spec, offset, sigma, n=10):
-    k = np.arange(n) + 0.5
-    a = k * np.pi * (3 - np.sqrt(5))
-    u = np.c_[np.sqrt(k / n) * np.cos(a), np.sqrt(k / n) * np.sin(a)]
-    u = (u - u.mean(0)) / u.std(0)
-    pts = np.asarray(offset) + u * np.asarray(sigma)
-    return [Hole(spec.center_mm[0] + x, spec.center_mm[1] - y, 4.5) for x, y in pts]
+def eval_stage2(seeds=20):
+    from shootcoach.config import load_target_spec
 
-
-def eval_stage2(spec, seeds=20):
+    spec = load_target_spec("configs/target_a4.yaml")
     rows = {}
     for name, (off, sig, faults, expect) in FAULT_CASES.items():
-        s1 = diagnose_stage1(group_stats(sunflower(spec, off, sig), spec), spec)
+        n = 10
+        k = np.arange(n) + 0.5
+        a = k * np.pi * (3 - np.sqrt(5))
+        u = np.c_[np.sqrt(k / n) * np.cos(a), np.sqrt(k / n) * np.sin(a)]
+        u = (u - u.mean(0)) / u.std(0)
+        pts = np.asarray(off) + u * np.asarray(sig)
+        s1 = diagnose_stage1(group_stats([Hole(spec.center_mm[0] + x, spec.center_mm[1] - y, 4.5) for x, y in pts], spec), spec)
         ok = 0
         for sd in range(seeds):
-            f = Faults(**{k: v * float(np.random.default_rng(sd).uniform(0.8, 1.3)) if k != "tremor" else v
-                          for k, v in faults.__dict__.items()})
-            seq = simulate_side_view((2.5, 5.0, 7.5), faults=f, seed=sd)
-            s2 = diagnose_stage2(s1, seq)       # shot times from recoil motion (no audio)
-            got = s2.final_cause_id
-            ok += int(got in expect) if isinstance(expect, set) else int(got == expect)
-        rows[name] = {"stage1_top": s1.candidates[0].cause_id if s1.candidates else None,
-                      "expected": sorted(expect) if isinstance(expect, set) else expect, "accuracy": ok / seeds}
+            f = Faults(**{kk: v * float(np.random.default_rng(sd).uniform(0.8, 1.3)) if kk != "tremor" else v
+                          for kk, v in faults.__dict__.items()})
+            got = diagnose_stage2(s1, simulate_side_view((2.5, 5.0, 7.5), faults=f, seed=sd)).final_cause_id
+            ok += int(got in expect) if expect else int(got is None)
+        rows[name] = {"expected": sorted(expect) if expect else "보류", "accuracy": ok / seeds}
     return rows
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=200)
-    ap.add_argument("--seed", type=int, default=2026)
+    ap.add_argument("--public", default="data/real_v1")
+    ap.add_argument("--real", default="data/kcg_real")
+    ap.add_argument("--shots", type=int, default=None, help="장당 발수 (없으면 정답 개수를 발수로 사용)")
     ap.add_argument("--out", default="docs/results.json")
     a = ap.parse_args()
-    spec = load_target_spec()
-    res = {"stage1_target": eval_target(spec, a.n, a.seed), "stage2_posture_synthetic": eval_stage2(spec)}
+    det = get_photo_detector()
+    res = {"detector": type(det).__name__}
+    if Path(a.public, "images", "test").exists() and hasattr(det, "raw"):
+        res["public_test"] = eval_public(det, Path(a.public))
+    if Path(a.real).exists() and hasattr(det, "raw"):
+        res["kcg_real_photos"] = eval_real(det, Path(a.real), default_spec(), a.shots)
+    res["stage2_posture_synthetic"] = eval_stage2()
     Path(a.out).write_text(json.dumps(res, ensure_ascii=False, indent=2))
-    print(json.dumps(res, ensure_ascii=False, indent=2))
+    print(json.dumps({k: v for k, v in res.items() if k != "kcg_real_photos"} |
+                     ({"kcg_real_photos": {k: v for k, v in res["kcg_real_photos"].items() if k != "per_image"}}
+                      if "kcg_real_photos" in res else {}), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

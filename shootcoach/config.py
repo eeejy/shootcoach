@@ -1,13 +1,13 @@
 """Target geometry configuration."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_TARGET_CONFIG = REPO_ROOT / "configs" / "target_a4.yaml"
+DEFAULT_TARGET_CONFIG = REPO_ROOT / "configs" / "kcg_circle.yaml"
 
 
 @dataclass
@@ -21,8 +21,6 @@ class TargetSpec:
     black_from_ring: int
     bullet_diameter_mm: float
     px_per_mm: float
-    aruco_dict: str
-    markers: dict[int, tuple[float, float, float]] = field(default_factory=dict)
 
     @property
     def canvas_px(self) -> tuple[int, int]:
@@ -38,12 +36,6 @@ class TargetSpec:
     def outer_radius_mm(self) -> float:
         return self.ring_radius_mm(10 - self.ring_count + 1)
 
-    def marker_corners_mm(self, marker_id: int) -> list[tuple[float, float]]:
-        """Corners in ArUco order (TL, TR, BR, BL) for a marker, in paper mm."""
-        cx, cy, s = self.markers[marker_id]
-        h = s / 2
-        return [(cx - h, cy - h), (cx + h, cy - h), (cx + h, cy + h), (cx - h, cy + h)]
-
 
 def load_target_spec(path: str | Path | None = None) -> TargetSpec:
     path = Path(path) if path else DEFAULT_TARGET_CONFIG
@@ -58,6 +50,4 @@ def load_target_spec(path: str | Path | None = None) -> TargetSpec:
         black_from_ring=int(raw["black_from_ring"]),
         bullet_diameter_mm=float(raw["bullet_diameter_mm"]),
         px_per_mm=float(raw["px_per_mm"]),
-        aruco_dict=raw["aruco_dict"],
-        markers={int(k): tuple(float(x) for x in v) for k, v in raw["markers"].items()},
     )

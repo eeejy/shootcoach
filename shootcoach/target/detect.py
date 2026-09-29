@@ -1,20 +1,17 @@
-"""Bullet-hole detection on the rectified target.
+"""Hole type (target mm coordinates) and the classic no-training detector.
 
-Two detectors share one output type:
-- YoloHoleDetector: trained model (models/hole_detector.pt)
-- ClassicHoleDetector: no-training fallback (adaptive threshold + contour circularity)
+The main detector is the photo-trained YOLO in shootcoach/target/photo.py; ClassicHoleDetector is a
+fallback that works on the flattened target image.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import cv2
 import numpy as np
 
-from shootcoach.config import REPO_ROOT, TargetSpec
+from shootcoach.config import TargetSpec
 
-DEFAULT_WEIGHTS = REPO_ROOT / "models" / "hole_detector.pt"
 
 
 @dataclass
@@ -36,26 +33,6 @@ def _nms_holes(holes: list[Hole], min_dist_mm: float) -> list[Hole]:
         if all(np.hypot(h.x_mm - k.x_mm, h.y_mm - k.y_mm) >= min_dist_mm for k in kept):
             kept.append(h)
     return kept
-
-
-class YoloHoleDetector:
-    def __init__(self, weights: str | Path = DEFAULT_WEIGHTS, conf: float = 0.25, imgsz: int = 832, device: str | None = None):
-        from ultralytics import YOLO  # lazy: keeps the rest of the package usable without torch
-
-        self.model = YOLO(str(weights))
-        self.conf = conf
-        self.imgsz = imgsz
-        self.device = device
-
-    def detect(self, rect: np.ndarray, spec: TargetSpec) -> list[Hole]:
-        res = self.model.predict(rect, conf=self.conf, imgsz=self.imgsz, device=self.device, verbose=False)[0]
-        ppm = spec.px_per_mm
-        holes = []
-        for (x1, y1, x2, y2), c in zip(res.boxes.xyxy.cpu().numpy(), res.boxes.conf.cpu().numpy()):
-            cx, cy = (x1 + x2) / 2 / ppm, (y1 + y2) / 2 / ppm
-            r = ((x2 - x1) + (y2 - y1)) / 4 / 1.1 / ppm   # labels were drawn at 1.1 × radius
-            holes.append(Hole(float(cx), float(cy), float(r), float(c)))
-        return _nms_holes(holes, spec.bullet_diameter_mm * 0.22)
 
 
 class ClassicHoleDetector:
@@ -89,10 +66,6 @@ class ClassicHoleDetector:
         ff = np.zeros((mask.shape[0] + 2, mask.shape[1] + 2), np.uint8)
         cv2.floodFill(filled, ff, (0, 0), 255)
         mask = mask | cv2.bitwise_not(filled)
-        for mid, (mx, my, sz) in spec.markers.items():
-            x0, y0 = int((mx - sz / 2 - 3) * ppm), int((my - sz / 2 - 3) * ppm)
-            x1, y1 = int((mx + sz / 2 + 8) * ppm), int((my + sz / 2 + 8) * ppm)
-            mask[max(0, y0):y1, max(0, x0):x1] = 0
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         area1 = np.pi * r_px ** 2
         holes = []
@@ -116,13 +89,3 @@ class ClassicHoleDetector:
                 for cx, cy in centers:
                     holes.append(Hole(float(cx) / ppm, float(cy) / ppm, r_px / ppm, 0.4))
         return _nms_holes(holes, spec.bullet_diameter_mm * 0.3)
-
-
-def get_detector(prefer: str = "auto"):
-    if prefer in ("auto", "yolo") and DEFAULT_WEIGHTS.exists():
-        try:
-            return YoloHoleDetector()
-        except Exception:  # noqa: BLE001 — torch missing etc.
-            if prefer == "yolo":
-                raise
-    return ClassicHoleDetector()

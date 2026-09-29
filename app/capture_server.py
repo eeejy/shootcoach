@@ -24,18 +24,15 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from shootcoach.config import load_target_spec  # noqa: E402
 from shootcoach.explain.vlm import template_explanation  # noqa: E402
-from shootcoach.pipeline import analyze_target  # noqa: E402
-from shootcoach.target.detect import get_detector  # noqa: E402
-from shootcoach.target.markers import MarkerError, detect_markers  # noqa: E402
+from shootcoach.pipeline import analyze_target, default_spec, get_photo_detector  # noqa: E402
+from shootcoach.target.locate import TargetNotFound, locate_target  # noqa: E402
 
-SPEC = load_target_spec()
+SPEC = default_spec()
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 # Access token: required by default when run from the command line (see main). Tests import the
 # module with no token. The page receives it in the URL (?t=...) and sends it back as a header.
 TOKEN: str | None = os.environ.get("SHOOTCOACH_TOKEN") or None
-POSITION_KO = {0: "왼쪽 위", 1: "오른쪽 위", 2: "오른쪽 아래", 3: "왼쪽 아래"}
 app = FastAPI(title="BullsAI 촬영 가이드")
 _detector = None
 
@@ -43,7 +40,7 @@ _detector = None
 def detector():
     global _detector
     if _detector is None:
-        _detector = get_detector("auto")
+        _detector = get_photo_detector()
     return _detector
 
 
@@ -65,23 +62,25 @@ def _decode(data: bytes) -> np.ndarray:
     return img
 
 
-def marker_status(img: np.ndarray) -> dict:
+MIN_DISC_FRACTION = 0.07      # 검은 원 반지름이 화면 짧은 변의 7% 이상이어야 탄공이 보인다
+
+
+def frame_status(img: np.ndarray) -> dict:
+    """촬영 가능 여부: 표적의 검은 원이 화면 안에 충분히 크게 보이는가 (마커 없음)."""
     h, w = img.shape[:2]
-    found = detect_markers(img, SPEC)
-    if len(found) < len(SPEC.markers) and max(h, w) < 1400:
-        # Small preview frames: markers can be ~15 px. Retry once on a 2x upscale.
-        big = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-        more = {k: v / 2 for k, v in detect_markers(big, SPEC).items()}
-        if len(more) > len(found):
-            found = more
-    missing = [m for m in SPEC.markers if m not in found]
-    return {
-        "found": sorted(found),
-        "missing": missing,
-        "missing_ko": [POSITION_KO.get(m, str(m)) for m in missing],
-        "ok": not missing,
-        "quads": {str(k): (v / [w, h]).round(4).tolist() for k, v in found.items()},   # normalised corners
-    }
+    try:
+        f = locate_target(img, SPEC)
+    except TargetNotFound:
+        return {"ok": False, "found": False, "message": "표적의 검은 원이 보이게 비춰 주세요"}
+    (cx, cy), (a, b), ang = f.center_px, f.axes_px, f.angle_deg
+    size = min(a, b) / min(h, w)
+    ok, msg = True, "표적 확인 — 촬영하세요"
+    if size < MIN_DISC_FRACTION:
+        ok, msg = False, "조금 더 가까이 찍어 주세요"
+    elif min(a, b) / max(a, b) < 0.8:
+        ok, msg = False, "표적 정면에서 찍어 주세요 (너무 비스듬합니다)"
+    return {"ok": ok, "found": True, "message": msg,
+            "ellipse": [round(cx / w, 4), round(cy / h, 4), round(a / w, 4), round(b / h, 4), round(ang, 1)]}
 
 
 @app.get("/")
@@ -105,22 +104,22 @@ def logo():
     return FileResponse(LOGO, media_type="image/png") if LOGO.exists() else Response(status_code=404)
 
 
-@app.post("/api/markers")
-async def api_markers(frame: UploadFile = File(...), x_token: str | None = Header(None)):
+@app.post("/api/frame")
+async def api_frame(frame: UploadFile = File(...), x_token: str | None = Header(None)):
     if not _check_token(x_token):
         return JSONResponse({"error": "토큰이 없거나 틀립니다."}, status_code=403)
     try:
         img = _decode(await _read_limited(frame))
         if os.environ.get("SHOOTCOACH_DEBUG_FRAMES"):
             cv2.imwrite(os.environ["SHOOTCOACH_DEBUG_FRAMES"], img)
-        return marker_status(img)
+        return frame_status(img)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
 @app.post("/api/analyze")
 async def api_analyze(photo: UploadFile = File(...), handedness: str = Form("right"),
-                      distance_m: float = Form(10.0), x_token: str | None = Header(None)):
+                      distance_m: float = Form(10.0), expected: int = Form(10), x_token: str | None = Header(None)):
     if not _check_token(x_token):
         return JSONResponse({"error": "토큰이 없거나 틀립니다."}, status_code=403)
     if handedness not in ("right", "left"):
@@ -129,14 +128,13 @@ async def api_analyze(photo: UploadFile = File(...), handedness: str = Form("rig
         img = _decode(await _read_limited(photo))
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
-    status = marker_status(img)
-    if len(status["found"]) < 3:
-        return JSONResponse({"error": "마커가 부족합니다: " + ", ".join(status["missing_ko"]) + " 마커가 보이게 다시 찍어 주세요.",
-                             "markers": status}, status_code=422)
+    status = frame_status(img)
+    if not status["found"]:
+        return JSONResponse({"error": status["message"], "frame": status}, status_code=422)
     try:
-        res = analyze_target(img, SPEC, handedness, distance_m, None, detector())
-    except MarkerError as e:
-        return JSONResponse({"error": str(e), "markers": status}, status_code=422)
+        res = analyze_target(img, SPEC, handedness, distance_m, None, detector(), expected_shots=expected)
+    except TargetNotFound as e:
+        return JSONResponse({"error": str(e), "frame": status}, status_code=422)
     ok, enc = cv2.imencode(".jpg", cv2.resize(res.overlay, None, fx=0.6, fy=0.6), [cv2.IMWRITE_JPEG_QUALITY, 85])
     rep = res.report
     return {
@@ -145,7 +143,8 @@ async def api_analyze(photo: UploadFile = File(...), handedness: str = Form("rig
         "explanation": template_explanation(rep),
         "overlay_jpg": base64.b64encode(enc.tobytes()).decode(),
         "timings": rep["timings"],
-        "markers": status,
+        "frame": status,
+        "notes": rep["notes"],
     }
 
 

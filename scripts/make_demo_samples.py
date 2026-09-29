@@ -9,13 +9,14 @@ from shootcoach.config import load_target_spec
 from shootcoach.synth import ShotGroupSpec, draw_holes, sample_group, simulate_photo
 from shootcoach.target.template import render_target
 
-SCENARIOS = {
-    "good": ShotGroupSpec(8, (1, -1), (3.5, 3.5)),
-    "zero_offset": ShotGroupSpec(8, (24, 18), (3.5, 3.5)),
-    "jerking_low_left": ShotGroupSpec(8, (-20, -22), (10, 10)),
-    "heeling_high_right": ShotGroupSpec(8, (20, 22), (10, 10)),
-    "breathing_vertical": ShotGroupSpec(8, (0, 0), (3, 20)),
-    "scattered": ShotGroupSpec(10, (0, 0), (20, 20)),
+S_ = 25.0 / 8.0   # scenarios were tuned in A4 ring widths (8 mm); KCG ring width is 25 mm
+SCENARIOS = {  # 10발 (완사 기준)
+    "good": ShotGroupSpec(10, (1 * S_, -1 * S_), (3.5 * S_, 3.5 * S_)),
+    "zero_offset": ShotGroupSpec(10, (24 * S_, 18 * S_), (3.5 * S_, 3.5 * S_)),
+    "low_left": ShotGroupSpec(10, (-20 * S_, -22 * S_), (10 * S_, 10 * S_)),
+    "high_right": ShotGroupSpec(10, (20 * S_, 22 * S_), (10 * S_, 10 * S_)),
+    "vertical": ShotGroupSpec(10, (0, 0), (3 * S_, 20 * S_)),
+    "scattered": ShotGroupSpec(10, (0, 0), (20 * S_, 20 * S_)),
 }
 
 

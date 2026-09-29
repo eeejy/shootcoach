@@ -57,7 +57,8 @@ def apply_profile(res: Stage1Result, stats: GroupStats, profile: ShooterProfile,
         elif cid in causes:
             c = causes[cid]
             by_id[cid] = Candidate(cid, c.cause_ko, round(0.5 * m, 3), c.guidance_ko, c.drill_ko,
-                                   list(c.posture_signals), c.observable_note, ["CAL"], ["CAL"])
+                                   list(c.posture_signals), "" if c.posture_signals else "현장 확인 필요",
+                                   ["CAL"], ["CAL"], list(c.checklist), c.axis)
     res.candidates = sorted(by_id.values(), key=lambda c: -c.score)
     res.notes.append(f"사수 '{profile.shooter_id}' 캘리브레이션 반영 (CAL = 본인 진단 세션 기준)")
     return res

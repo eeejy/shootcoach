@@ -1,7 +1,7 @@
 """Train the bullet-hole detector (Ultralytics YOLO) on the synthetic (or real) dataset.
 
-    python scripts/train_detector.py --data data/synth/data.yaml --epochs 60
-Outputs runs/detect/<name>/weights/best.pt; copy it to models/hole_detector.pt.
+    python scripts/train_detector.py --data data/real_v1/data.yaml --model models/yolo11s.pt --imgsz 960 --batch 8 --epochs 30
+Outputs runs/detect/<name>/weights/best.pt → models/hole_detector_photo.pt (optimizer 제거 후).
 """
 import argparse
 import os
@@ -12,7 +12,7 @@ from shootcoach.device import best_device, model_path
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--data", default="data/synth/data.yaml")
-ap.add_argument("--model", default=model_path("yolo11n.pt"), help="이어 학습하려면 models/hole_detector.pt")
+ap.add_argument("--model", default=model_path("yolo11n.pt"), help="이어 학습하려면 models/hole_detector_photo.pt")
 ap.add_argument("--epochs", type=int, default=60)
 ap.add_argument("--imgsz", type=int, default=832)
 ap.add_argument("--batch", type=int, default=16)

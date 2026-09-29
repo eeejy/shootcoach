@@ -2,9 +2,9 @@
 
 입력 CSV (예: data/validation.csv):
     target_image,video,handedness,instructor_cause,note
-    data/haegyeong/raw/kim_01.jpg,data/haegyeong/video/kim_01.mp4,right,jerking,
-    data/haegyeong/raw/lee_02.jpg,,right,sight_zero,영상 없음
-instructor_cause 는 rules/causes.csv 의 cause_id (예: jerking, heeling, sight_zero, breathing ...)
+    data/haegyeong/raw/kim_01.jpg,data/haegyeong/video/kim_01.mp4,right,L2,
+    data/haegyeong/raw/lee_02.jpg,,right,Z1,영상 없음
+instructor_cause 는 rules/instructor_kb.yaml 의 원인 ID (예: L1 반동 예측, L2 급작 격발, H1 낮은 파지, LB1 얕은 방아쇠, S1 흔들림, Z1 영점)
 
     python scripts/validate_vs_instructor.py data/validation.csv
 → docs/validation_report.md, docs/validation_rows.csv
@@ -17,7 +17,7 @@ from pathlib import Path
 
 from shootcoach.diagnosis.rules import load_causes
 from shootcoach.pipeline import analyze_posture, analyze_target
-from shootcoach.target.markers import MarkerError
+from shootcoach.target.locate import TargetNotFound
 
 ap = argparse.ArgumentParser()
 ap.add_argument("csv")
@@ -30,13 +30,13 @@ with open(a.csv, encoding="utf-8") as f:
     for r in csv.DictReader(f):
         truth = r["instructor_cause"].strip()
         if truth not in causes:
-            raise SystemExit(f"알 수 없는 원인 ID '{truth}' — rules/causes.csv 의 cause_id를 쓰세요")
+            raise SystemExit(f"알 수 없는 원인 ID '{truth}' — rules/instructor_kb.yaml 의 원인 ID를 쓰세요")
         hand = (r.get("handedness") or "right").strip()
         row = {"target_image": r["target_image"], "instructor": truth, "top1": "", "top3": "", "final": "",
                "stage2": "", "hit_top1": 0, "hit_top3": 0, "hit_final": "", "error": ""}
         try:
             rep = analyze_target(r["target_image"], handedness=hand).report
-        except (MarkerError, FileNotFoundError) as e:
+        except (TargetNotFound, FileNotFoundError) as e:
             row["error"] = str(e)
             out_rows.append(row)
             continue

@@ -1,0 +1,12 @@
+# 해경·경찰 완사 원형 표적 (마커 없음). 가로 약 55cm × 세로 54cm, 1~10점, 7~10점 검정.
+# 링 간격은 국제 25m 정밀 권총 표적과 같은 구조로 가정 (10점 반지름 25mm, 링마다 +25mm).
+# 실물을 자로 재서 다르면 ring10_radius_mm / ring_step_mm 만 고치면 된다.
+name: kcg_circle
+paper_mm: [550, 540]
+center_mm: [275, 270]
+ring_count: 10
+ring10_radius_mm: 25.0
+ring_step_mm: 25.0
+black_from_ring: 7
+bullet_diameter_mm: 9.0
+px_per_mm: 2.0

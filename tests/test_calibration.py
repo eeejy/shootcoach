@@ -6,7 +6,7 @@ from shootcoach.diagnosis.stage1 import diagnose_stage1
 from shootcoach.target.detect import Hole
 from shootcoach.target.scoring import group_stats
 
-SPEC = load_target_spec()
+SPEC = load_target_spec("configs/target_a4.yaml")
 
 
 def stats_at(offset, sigma=(13, 13), n=10):
@@ -18,25 +18,25 @@ def stats_at(offset, sigma=(13, 13), n=10):
     return group_stats([Hole(SPEC.center_mm[0] + x, SPEC.center_mm[1] - y, 4.5) for x, y in pts], SPEC)
 
 
-def test_personal_jerk_direction_overrides_chart(tmp_path):
-    # This shooter's deliberate-jerk sessions land at 6 o'clock, not the chart's 7:30.
+def test_personal_fault_direction_overrides_chart(tmp_path):
+    # This shooter's deliberate abrupt-trigger (L2) sessions land at 3 o'clock, where the KB would not put L2.
     p = ShooterProfile("사수A")
     for _ in range(3):
-        p.add_session("jerking", stats_at((0, -24)))
+        p.add_session("L2", stats_at((24, 0)))
     p.save(tmp_path / "a.json")
     p = ShooterProfile.load(tmp_path / "a.json")
-    st = stats_at((0, -24))
+    st = stats_at((24, 0))
     base = diagnose_stage1(st, SPEC)
-    assert "jerking" not in [c.cause_id for c in base.candidates]       # chart alone misses it
+    assert "L2" not in [c.cause_id for c in base.candidates]            # KB alone misses it
     cal = apply_profile(diagnose_stage1(st, SPEC), st, p)
-    assert "jerking" in [c.cause_id for c in cal.candidates]
+    assert "L2" in [c.cause_id for c in cal.candidates]
     assert any("CAL" in c.sources for c in cal.candidates)
 
 
 def test_boost_existing_candidate():
     p = ShooterProfile("사수B")
-    p.add_session("canting", stats_at((-22, -22)))
+    p.add_session("L3", stats_at((-22, -22)))
     st = stats_at((-22, -22))
     before = {c.cause_id: c.score for c in diagnose_stage1(st, SPEC).candidates}
     after = {c.cause_id: c.score for c in apply_profile(diagnose_stage1(st, SPEC), st, p).candidates}
-    assert after["canting"] > before["canting"]
+    assert after["L3"] > before["L3"]

@@ -133,14 +133,6 @@ def brand_header() -> None:
     st.markdown(f'<div class="ba-brand">{inner}</div>', unsafe_allow_html=True)
 
 
-def sidebar_nav() -> None:
-    try:
-        st.page_link("streamlit_app.py", label="사격 분석")
-        st.page_link("pages/1_라벨링.py", label="탄공 라벨링")
-    except Exception:  # noqa: BLE001 — page opened on its own (e.g. in tests): no menu
-        pass
-
-
 def section(label: str) -> None:
     st.markdown(f'<div class="ba-sec">{escape(label)}</div>', unsafe_allow_html=True)
 

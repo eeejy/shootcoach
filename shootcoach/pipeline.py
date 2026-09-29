@@ -11,9 +11,29 @@ import numpy as np
 
 from shootcoach.config import TargetSpec, load_target_spec
 from shootcoach.diagnosis.stage1 import diagnose_stage1
-from shootcoach.target.detect import Hole, get_detector
-from shootcoach.target.markers import MarkerError, rectify
+from shootcoach.target.detect import ClassicHoleDetector, Hole
+from shootcoach.target.locate import TargetNotFound, locate_target, rectified_view
 from shootcoach.target.scoring import group_stats
+
+DEFAULT_SPEC = "configs/kcg_circle.yaml"
+
+
+def default_spec() -> TargetSpec:
+    from shootcoach.config import REPO_ROOT
+
+    return load_target_spec(REPO_ROOT / DEFAULT_SPEC)
+
+
+def get_photo_detector():
+    """Photo-trained YOLO when its weights exist, else the classic (template) detector."""
+    from shootcoach.target.photo import PHOTO_WEIGHTS, PhotoHoleDetector
+
+    if PHOTO_WEIGHTS.exists():
+        try:
+            return PhotoHoleDetector()
+        except Exception:  # noqa: BLE001 — torch missing etc.
+            pass
+    return ClassicHoleDetector()
 
 
 @dataclass
@@ -44,38 +64,75 @@ def draw_overlay(rect: np.ndarray, holes: list[Hole], report: dict, spec: Target
     return out
 
 
+def detect_holes_px(det, image: np.ndarray, frame, spec: TargetSpec, expected_shots: int | None):
+    """AI 검출 + 발수 보정 + (모자라면) 검은 원 안 밝은 탄공 보충. 사진 px 좌표로 돌려준다."""
+    from shootcoach.target.photo import bright_holes_in_disc
+
+    outer = spec.outer_radius_mm * 1.08
+
+    def inside(x, y):
+        return float(np.hypot(*frame.to_target_mm(np.array([[x, y]]))[0])) <= outer
+
+    px, log = det.detect(image, expected_shots, inside)
+    if expected_shots and len(px) < expected_shots:
+        extra = bright_holes_in_disc(image, frame, spec, px, expected_shots - len(px))
+        px = px + extra
+        log["bright_in_disc"] = len(extra)
+        log["found"] = len(px)
+    return px, log
+
+
 def analyze_target(image: np.ndarray | str | Path, spec: TargetSpec | None = None, handedness: str = "right",
                    distance_m: float | None = None, click_mm_per_10m: float | None = None,
-                   detector=None, already_rectified: bool = False) -> TargetAnalysis:
-    spec = spec or load_target_spec()
+                   detector=None, expected_shots: int | None = 10, holes_override: list[Hole] | None = None
+                   ) -> TargetAnalysis:
+    """사진 → 검은 원으로 표적 찾기(마커 없음) → 탄공 검출·발수 보정 → 채점·통계 → 1단계 진단.
+
+    holes_override: 교관이 수정한 탄공 목록(표적 mm 좌표). 주면 검출을 건너뛰고 그대로 채점한다.
+    """
+    spec = spec or default_spec()
     if not isinstance(image, np.ndarray):
         image = cv2.imread(str(image))
         if image is None:
             raise FileNotFoundError("이미지를 읽을 수 없습니다.")
     t0 = time.perf_counter()
     timings = {}
-    if already_rectified:
-        rect, reproj, markers = cv2.resize(image, spec.canvas_px), 0.0, []
-    else:
-        r = rectify(image, spec)
-        rect, reproj, markers = r.image, r.reprojection_mm, r.marker_ids
-    timings["rectify_s"] = time.perf_counter() - t0
-    det = detector or get_detector()
+    frame = locate_target(image, spec)
+    rect = rectified_view(image, frame, spec)
+    timings["locate_s"] = time.perf_counter() - t0
+    det = detector if detector is not None else get_photo_detector()
     t1 = time.perf_counter()
-    holes = det.detect(rect, spec)
+    det_log: dict = {}
+    if holes_override is not None:
+        holes = list(holes_override)
+        det_log = {"source": "instructor"}
+    elif hasattr(det, "raw"):                                   # photo model: detect on the original photo
+        px, det_log = detect_holes_px(det, image, frame, spec, expected_shots)
+        pts = frame.paper_mm(np.array([[h.x, h.y] for h in px]).reshape(-1, 2), spec)
+        holes = [Hole(float(x), float(y), max(spec.bullet_diameter_mm / 2 * 0.6, h.r * frame.mm_per_px), h.conf)
+                 for (x, y), h in zip(pts, px)]
+    else:                                                       # classic detector works on the flattened target
+        holes = det.detect(rect, spec)
     timings["detect_s"] = time.perf_counter() - t1
     t2 = time.perf_counter()
     st = group_stats(holes, spec)
     s1 = diagnose_stage1(st, spec, handedness, distance_m, click_mm_per_10m)
     timings["diagnose_s"] = time.perf_counter() - t2
     timings["total_s"] = time.perf_counter() - t0
+    notes = []
+    if expected_shots and holes_override is None and len(holes) != expected_shots:
+        notes.append(f"탄공 {len(holes)}개 검출 (기준 {expected_shots}발). 빠졌거나 잘못 잡힌 탄공은 사진을 눌러 고쳐 주세요.")
     report = {
         "target": spec.name,
         "detector": type(det).__name__,
-        "rectification": {"markers": markers, "reprojection_mm": round(reproj, 3)},
+        "frame": {"center_px": [round(v, 1) for v in frame.center_px], "axes_px": [round(v, 1) for v in frame.axes_px],
+                  "fill": round(frame.fill, 3), "mm_per_px": round(frame.mm_per_px, 3)},
+        "detection": det_log,
+        "expected_shots": expected_shots,
         "holes": [h.as_dict() for h in holes],
         "group": st.as_dict(),
         "stage1": s1.as_dict(),
+        "notes": notes,
         "timings": {k: round(v, 3) for k, v in timings.items()},
     }
     return TargetAnalysis(report, rect, draw_overlay(rect, holes, report, spec), holes)
@@ -113,3 +170,23 @@ def _np_default(o):
 
 def to_json(report: dict) -> str:
     return json.dumps(report, ensure_ascii=False, indent=2, default=_np_default)
+
+
+def count_holes(image: np.ndarray, detector=None, expected_shots: int | None = None) -> dict:
+    """원형 표적이 아닐 때(속사 하반신 표적 등): 채점 없이 탄공 위치·개수만.
+
+    영역 채점(2·5·4점)은 속사 표적 규정을 받은 뒤 추가한다.
+    """
+    det = detector if detector is not None else get_photo_detector()
+    if not hasattr(det, "raw"):
+        raise TargetNotFound("원형 표적을 찾지 못했습니다. (탄공 개수 세기는 AI 모델이 있어야 합니다)")
+    px, log = det.detect(image, expected_shots)
+    vis = image.copy()
+    lw = max(2, image.shape[1] // 400)
+    for i, h in enumerate(px, 1):
+        c = (int(h.x), int(h.y))
+        cv2.circle(vis, c, int(max(h.r * 1.4, 6)), (0, 200, 255), lw, cv2.LINE_AA)
+        cv2.putText(vis, str(i), (c[0] + int(h.r * 1.4) + 2, c[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.5 + lw * 0.15,
+                    (0, 120, 255), lw, cv2.LINE_AA)
+    return {"n": len(px), "expected": expected_shots, "detection": log, "overlay": vis,
+            "holes_px": [[round(h.x, 1), round(h.y, 1), round(h.r, 1), round(h.conf, 3)] for h in px]}

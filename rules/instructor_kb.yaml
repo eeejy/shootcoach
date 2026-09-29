@@ -1,0 +1,176 @@
+# BullsAI 진단 지식베이스 — 교관 자료 기준
+# 출처: "사격 표적지 탄착군 원인 분석 (PROJECT BULLSAI Master Specification v1.0)",
+#       "BullsAI 다중 변수 기반 AI 사격 진단 알고리즘" (아이디어 제시 교관 정리, 2026-09-29)
+# 원칙: Pattern → Candidate Causes. 단일 원인을 단정하지 않고, 후보를 가중합으로 내고 교관이 현장에서 검증한다.
+# 오른손잡이 기준. 왼손잡이는 좌우 성분을 뒤집어 적용한다.
+#
+# 각 원인
+#   axis     : low | high | left | right | spread | zero      (어느 성분이 커질 때 후보가 되는가)
+#   prior    : 같은 축 안에서의 기본 가중치 (교관 검토로 조정)
+#   profile  : 사수 프로필이 해당 값일 때 곱할 배수
+#   signals  : 자세 영상(2단계)에서 확인할 신호 ID (rules/posture_signals.csv)
+#   check    : 교관이 현장에서 확인할 것 (체크리스트)
+
+causes:
+  L1:
+    name: 반동 예측 (Recoil Anticipation)
+    axis: low
+    prior: 0.9
+    desc: 격발 직전 사수가 반동을 예상하면서 총기에 무의식적인 하방 밀기가 생김.
+    check: [격발 직전 총구가 아래로 꺼지는가, 공포탄(볼앤더미) 섞었을 때 총구가 눌리는가, 격발 순간 눈을 감거나 어깨가 움츠러드는가]
+    drill: 볼앤더미(실탄·공포탄 혼합) 훈련, 건식 사격
+    signals: [muzzle_dip_preshot, shoulder_tension]
+  L2:
+    name: 급작 격발 (Abrupt Trigger Press)
+    axis: low
+    prior: 0.85
+    desc: 급격한 방아쇠 조작으로 손목에 힘이 가해져 총구가 떨어지고 조준이 흐트러짐.
+    check: [방아쇠를 한 번에 '딱' 당기는가, 조준이 맞는 순간 서둘러 격발하는가, 방아쇠 여유를 먼저 없애는가]
+    drill: 건식 사격 슬로우 트리거 (여유 제거 → 일정 압력)
+    signals: [muzzle_dip_preshot, lateral_shift_preshot]
+  L3:
+    name: 동반 수축 (Sympathetic Grip)
+    axis: low
+    prior: 0.7
+    desc: 방아쇠 손가락 외 다른 손가락(악력)이 동시에 과도하게 수축함.
+    check: [격발 순간 손 전체를 꽉 쥐는가, 새끼·약지 손가락 마디가 하얗게 되는가, 그립 압력이 격발 중에 바뀌는가]
+    drill: 그립 압력 고정 후 검지만 움직이는 건식 사격
+    signals: [muzzle_dip_preshot, wrist_dip_preshot]
+  L4:
+    name: 손목/그립 변동 (Wrist / Grip Disturbance)
+    axis: low
+    prior: 0.65
+    desc: 격발 과정에서 손목 각도나 그립 압력이 변함.
+    check: [격발 전후 손목 각도가 달라지는가, 매 발 그립 위치가 같은가]
+    drill: 손목 고정 그립 연습, 거총 유지
+    signals: [wrist_unstable, wrist_dip_preshot]
+  H1:
+    name: 그립 불안정 / 낮은 파지 (Grip Geometry / Low Grip)
+    axis: high
+    prior: 0.85
+    desc: 손잡이 최하단을 파지해 격발 전 총구가 들리고 총기 안정성이 떨어짐.
+    check: [손 물갈퀴가 손잡이 최상단(비버테일)에 붙어 있는가, 손잡이를 아래쪽으로 잡는가]
+    drill: 높은 파지(하이 그립) 재설정 반복
+    signals: [muzzle_up_preshot]
+  H2:
+    name: 손목 굴곡 (Wrist Configuration)
+    axis: high
+    prior: 0.75
+    desc: 과도한 손목 꺾임으로 방아쇠 힘 전달과 그립 역학이 변형됨.
+    check: [손목이 위나 아래로 꺾여 있는가, 팔뚝과 총열이 일직선인가]
+    drill: 손목·팔뚝 일직선 거총 연습
+    signals: [muzzle_up_preshot, elbow_angle_change]
+  H3:
+    name: 보조손 비대칭 압력 (Support-Hand Asymmetry)
+    axis: high
+    prior: 0.65
+    desc: 보조손의 상향·비대칭 압력으로 총기에 회전력이 생김.
+    check: [보조손이 총을 위로 받치듯 누르는가, 양손 압력 비율이 일정한가]
+    drill: 양손 파지 압력 배분 연습 (주손:보조손 비율 고정)
+    signals: [lateral_shift_preshot]
+  H4:
+    name: 반동 제어 실패 (Recoil Management)
+    axis: high
+    prior: 0.7
+    desc: 격발 전후 총기 움직임을 안정적으로 관리하지 못함.
+    check: [격발 후 총구가 과하게 튀는가, 다음 조준까지 회복이 늦은가, 팔로스루(격발 후 조준 유지)가 있는가]
+    drill: 격발 후 1초 조준 유지(팔로스루), 반동 회복 연습
+    signals: [muzzle_up_preshot, early_drop_post]
+  LB1:
+    name: 방아쇠 얕은 파지 (손가락 끝 조작)
+    axis: left
+    prior: 0.8
+    desc: 검지 끝으로 방아쇠를 눌러 총구가 좌측으로 밀림.
+    check: [검지 첫마디 중앙이 방아쇠에 닿는가, 손가락 끝만 걸치는가]
+    drill: 검지 위치 교정 건식 사격
+    signals: []
+  LB2:
+    name: 보조손의 과도한 당김 압력
+    axis: left
+    prior: 0.7
+    desc: 보조손이 총을 좌측으로 당겨 편향이 생김.
+    check: [보조손이 격발 순간 당기는가, 양손 압력 균형]
+    drill: 보조손 압력 배분 연습
+    signals: [lateral_shift_preshot]
+  LB3:
+    name: 우측 어깨 전진 비대칭 자세
+    axis: left
+    prior: 0.6
+    desc: 우측 어깨가 앞으로 나온 비대칭 자세로 좌측 회전이 생김.
+    check: [양 어깨가 표적과 평행한가, 스탠스가 비틀려 있는가]
+    drill: 스탠스·자연 조준점 재설정
+    signals: [torso_sway]
+  LB4:
+    name: 짧은 손가락에 따른 측면 횡력
+    axis: left
+    prior: 0.6
+    desc: 손가락 길이 제약으로 방아쇠를 곧게 뒤로 누르지 못하고 횡력이 생김.
+    check: [손 크기에 비해 그립이 큰가, 방아쇠까지 손가락이 충분히 닿는가]
+    drill: 그립 크기(백스트랩) 조정 검토, 검지 위치 교정
+    signals: []
+    profile: {finger_length: {short: 1.8}, hand_size: {small: 1.5}}
+  RB1:
+    name: 방아쇠 깊은 파지 (두 번째 마디 조작)
+    axis: right
+    prior: 0.8
+    desc: 검지를 깊게 넣어 둘째 마디로 조작해 총구가 우측으로 회전함.
+    check: [검지가 방아쇠에 너무 깊이 들어가는가, 둘째 마디로 누르는가]
+    drill: 검지 첫마디 중앙 위치 교정 건식 사격
+    signals: []
+    profile: {finger_length: {long: 1.6}, hand_size: {large: 1.4}}
+  RB2:
+    name: 보조손의 우측 밀어내기 압력
+    axis: right
+    prior: 0.7
+    desc: 보조손이 총을 우측으로 밀어 편향이 생김.
+    check: [보조손이 격발 순간 미는가, 양손 압력 균형]
+    drill: 보조손 압력 배분 연습
+    signals: [lateral_shift_preshot]
+  RB3:
+    name: 좌측 어깨 과전진 정렬 오류
+    axis: right
+    prior: 0.6
+    desc: 좌측 어깨가 앞으로 나와 우측 회전이 생김.
+    check: [양 어깨가 표적과 평행한가, 스탠스가 비틀려 있는가]
+    drill: 스탠스·자연 조준점 재설정
+    signals: [torso_sway]
+  S1:
+    name: 신체 흔들림 (조준 안정성 결여)
+    axis: spread
+    prior: 0.8
+    desc: 조준 중 몸·팔이 흔들려 탄착군이 넓게 퍼짐.
+    check: [조준 중 총구가 원을 그리는가, 호흡을 멈추고 격발하는가, 스탠스가 안정적인가]
+    drill: 거총 유지·호흡 조절(BRASS) 연습
+    signals: [torso_sway, breath_sway]
+  S2:
+    name: 피로도
+    axis: spread
+    prior: 0.6
+    desc: 팔·어깨 피로로 조준 유지가 어려워짐.
+    check: [뒤쪽 탄일수록 퍼지는가, 조준 중 팔이 처지는가]
+    drill: 휴식 후 재사격, 거총 근지구력 운동
+    signals: [arm_sag_preshot]
+    profile: {fatigue: {high: 2.0}}
+  S3:
+    name: 불규칙한 그립 압력
+    axis: spread
+    prior: 0.7
+    desc: 매 발 그립 압력이 달라 일관성이 떨어짐.
+    check: [매 발 같은 위치·압력으로 파지하는가, 탄창 교체 후 그립이 바뀌는가]
+    drill: 그립 루틴(같은 위치·같은 압력) 반복
+    signals: [wrist_unstable]
+  Z1:
+    name: 총기 영점 불일치 (Zeroing)
+    axis: zero
+    prior: 1.0
+    desc: 조준점(POA)과 탄착점(POI)이 어긋남. 탄착군이 촘촘한데 한쪽으로 몰리면 자세보다 영점을 먼저 확인한다.
+    check: [같은 총으로 다른 사수가 쏴도 같은 방향으로 가는가, 조준기가 헐겁거나 틀어졌는가, 사격 거리가 영점 거리와 같은가]
+    drill: 영점 사격 5발 → 조준기 조정 → 확인 5발
+    signals: []
+
+# 대각선 편향: 두 성분이 함께 클 때 짝지어진 원인에 가산 (교관 자료 '복합 편향 벡터')
+diagonals:
+  left_high:  {desc: "좌측 회전(자세 비대칭) + 상방 이동(반동 제어 실패)", boost: [LB3, H4]}
+  right_high: {desc: "우측 회전(깊은 방아쇠) + 상방 이동(그립 불안정)", boost: [RB1, H1]}
+  left_low:   {desc: "좌측 회전(구조적 횡력) + 하방 이동(반동 예측/급작 격발)", boost: [LB4, L1, L2]}
+  right_low:  {desc: "우측 회전(보조손 간섭) + 하방 이동(악력 동시 수축)", boost: [RB2, L3]}

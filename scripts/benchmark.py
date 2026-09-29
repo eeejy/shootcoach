@@ -14,7 +14,8 @@ import cv2
 
 from shootcoach.explain.vlm import installed_models, vlm_explanation
 from shootcoach.pipeline import analyze_target
-from shootcoach.target.detect import ClassicHoleDetector, YoloHoleDetector
+from shootcoach.pipeline import get_photo_detector
+from shootcoach.target.detect import ClassicHoleDetector
 
 
 def chip():
@@ -28,10 +29,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="docs/benchmark.json")
     ap.add_argument("--video", default="samples/real_video/clip_army_5_9.mp4")
+    ap.add_argument("--photos", default="samples", help="분석할 표적지 사진 폴더")
     a = ap.parse_args()
     res = {"machine": chip(), "python": platform.python_version()}
-    imgs = sorted(Path("samples").glob("demo_*.jpg"))
-    for name, det in (("yolo", YoloHoleDetector()), ("classic", ClassicHoleDetector())):
+    imgs = sorted(Path(a.photos).glob("*.jp*g"))
+    for name, det in (("photo_model", get_photo_detector()), ("classic", ClassicHoleDetector())):
         analyze_target(str(imgs[0]), detector=det)                       # warm-up
         ts = [analyze_target(str(p), detector=det).report["timings"]["total_s"] for p in imgs for _ in range(3)]
         res[f"target_pipeline_{name}_ms"] = {"median": round(1000 * stats.median(ts), 1), "max": round(1000 * max(ts), 1)}
@@ -42,7 +44,7 @@ def main():
         dt = time.perf_counter() - t0
         res["pose_ms_per_frame"] = round(1000 * dt / len(seq.xy), 1)
         res["pose_clip"] = {"frames": len(seq.xy), "fps": round(seq.fps, 2), "seconds": round(dt, 2)}
-    rep = analyze_target(str(Path("samples/demo_jerking_low_left.jpg")), detector=YoloHoleDetector())
+    rep = analyze_target(str(Path("samples/demo_low_left.jpg")), detector=get_photo_detector())
     res["llm"] = {}
     for m in ("qwen3:8b", "qwen2.5vl:3b"):
         if not any(n.startswith(m) for n in installed_models()):

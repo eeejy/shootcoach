@@ -43,9 +43,10 @@
 <div id="status">준비 중…</div>
 <div class="row">
   <select id="hand"><option value="right">오른손잡이</option><option value="left">왼손잡이</option></select>
-  <select id="dist"><option>5</option><option selected>10</option><option>15</option><option>25</option></select>
+  <select id="dist"><option value="5">5m</option><option value="10" selected>10m</option><option value="15">15m</option><option value="25">25m</option></select>
+  <select id="shots"><option value="5">5발</option><option value="10" selected>10발</option><option value="20">20발</option></select>
 </div>
-<div class="row" id="liveRow" hidden><button id="shutter" disabled>마커 4개가 보이면 촬영</button></div>
+<div class="row" id="liveRow" hidden><button id="shutter" disabled>표적이 잡히면 촬영</button></div>
 <div class="row" id="photoRow" hidden><label class="filebtn">표적지 촬영<input id="file" type="file" accept="image/*" capture="environment"></label></div>
 <div id="result"></div>
 <script>
@@ -56,19 +57,15 @@ let okStreak = 0, busy = false;
 
 function setStatus(text, cls) { statusEl.textContent = text; statusEl.className = cls || ""; }
 
-function describe(m) {
-  if (m.ok) return ["마커 4개 확인 — 촬영하세요", "ok"];
-  if (!m.found.length) return ["표적지 네 모서리의 마커가 보이게 비춰 주세요", "bad"];
-  return [`마커 ${m.found.length}/4 — ${m.missing_ko.join(", ")} 마커가 안 보입니다`, "warn"];
-}
+function describe(m) { return [m.message, m.ok ? "ok" : (m.found ? "warn" : "bad")]; }
 
-function drawQuads(m) {
+function drawTarget(m) {
   const w = ov.width = ov.clientWidth * devicePixelRatio, h = ov.height = ov.clientHeight * devicePixelRatio;
   const g = ov.getContext("2d"); g.clearRect(0, 0, w, h);
+  if (!m.ellipse) return;
+  const [cx, cy, a, b, ang] = m.ellipse;
   g.lineWidth = 5 * devicePixelRatio; g.strokeStyle = m.ok ? "#4f9d6c" : "#c8963a";
-  for (const q of Object.values(m.quads)) {
-    g.beginPath(); q.forEach(([x, y], i) => i ? g.lineTo(x * w, y * h) : g.moveTo(x * w, y * h)); g.closePath(); g.stroke();
-  }
+  g.beginPath(); g.ellipse(cx * w, cy * h, a * w, b * h, ang * Math.PI / 180, 0, 2 * Math.PI); g.stroke();
 }
 
 function frameBlob(maxSide) {
@@ -90,8 +87,8 @@ async function tick() {
   if (!busy && video.videoWidth) {
     busy = true;
     try {
-      const m = await post("/api/markers", "frame", await frameBlob(960));
-      drawQuads(m); const [t, c] = describe(m); setStatus(t, c);
+      const m = await post("/api/frame", "frame", await frameBlob(960));
+      drawTarget(m); const [t, c] = describe(m); setStatus(t, c);
       okStreak = m.ok ? okStreak + 1 : 0; shutter.disabled = okStreak < 2;
     } catch (e) { setStatus("PC와 연결이 끊겼습니다: " + e.message, "bad"); }
     busy = false;
@@ -105,13 +102,13 @@ function render(r) {
   $("result").innerHTML = `<img src="data:image/jpeg;base64,${r.overlay_jpg}">
     <div class="card"><b>${g.n}발 · ${g.total_score}점</b> · ${s.shape_ko} · ${s.sector_ko}<br><span class="muted">처리 ${Math.round(r.timings.total_s * 1000)}ms</span></div>
     ${s.zero_adjust ? `<div class="card">${s.zero_adjust.text_ko}</div>` : ""}
-    ${s.notes.map((n) => `<div class="card muted">${n}</div>`).join("")}${cands}`;
+    ${[...(r.notes || []), ...s.notes].map((n) => `<div class="card muted">${n}</div>`).join("")}${cands}`;
   $("result").scrollIntoView({ behavior: "smooth" });
 }
 
 async function analyze(blob) {
   setStatus("분석 중…", "");
-  try { render(await post("/api/analyze", "photo", blob, { handedness: $("hand").value, distance_m: $("dist").value })); setStatus("분석 완료", "ok"); }
+  try { render(await post("/api/analyze", "photo", blob, { handedness: $("hand").value, distance_m: $("dist").value, expected: $("shots").value })); setStatus("분석 완료", "ok"); }
   catch (e) { setStatus(e.message, "bad"); }
 }
 

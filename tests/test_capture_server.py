@@ -46,3 +46,23 @@ def test_analyze_rejects_blank_photo():
     blank = np.full((600, 400, 3), 200, np.uint8)
     r = client.post("/api/analyze", files={"photo": ("p.jpg", _jpg(blank), "image/jpeg")})
     assert r.status_code == 422 and "마커" in r.json()["error"]
+
+
+def test_token_required_when_set(monkeypatch):
+    import app.capture_server as cs
+
+    monkeypatch.setattr(cs, "TOKEN", "secret123")
+    assert client.get("/").status_code == 403
+    assert client.get("/?t=secret123").status_code == 200
+    img = cv2.resize(cv2.imread(str(DEMO)), None, fx=0.4, fy=0.4)
+    files = {"frame": ("f.jpg", _jpg(img), "image/jpeg")}
+    assert client.post("/api/markers", files=files).status_code == 403
+    assert client.post("/api/markers", files=files, headers={"X-Token": "secret123"}).status_code == 200
+
+
+def test_upload_size_limit(monkeypatch):
+    import app.capture_server as cs
+
+    monkeypatch.setattr(cs, "MAX_UPLOAD_BYTES", 1000)
+    r = client.post("/api/markers", files={"frame": ("f.jpg", b"x" * 5000, "image/jpeg")})
+    assert r.status_code == 400 and "너무 큽니다" in r.json()["error"]

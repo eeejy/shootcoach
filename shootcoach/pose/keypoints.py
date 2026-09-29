@@ -23,7 +23,7 @@ class KeypointSeq:
         return np.arange(len(self.xy)) / self.fps
 
 
-def extract_keypoints(video_path: str | Path, model: str = "yolo11n-pose.pt", device: str | None = None,
+def extract_keypoints(video_path: str | Path, model: str | None = None, device: str | None = None,
                       max_frames: int | None = None, stride: int = 1) -> KeypointSeq:
     import cv2
     from ultralytics import YOLO
@@ -31,7 +31,9 @@ def extract_keypoints(video_path: str | Path, model: str = "yolo11n-pose.pt", de
     cap = cv2.VideoCapture(str(video_path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    net = YOLO(model)
+    from shootcoach.device import model_path
+
+    net = YOLO(model or model_path("yolo11n-pose.pt"))
     xs, cs, cuts, diffs = [], [], [], []
     prev_hist = prev_small = None
     i = 0

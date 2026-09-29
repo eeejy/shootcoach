@@ -30,6 +30,21 @@ with st.sidebar:
     display_w = st.slider("화면 표시 폭(px)", 400, 1000, 640, 20)
     st.write(dataset_counts(out))
 
+DATA_ROOT = (ROOT / "data").resolve()
+
+
+def _inside_data(path_str: str) -> Path | None:
+    """Only folders under <repo>/data are allowed (the app may be reachable from the network)."""
+    p = Path(path_str).expanduser()
+    p = (p if p.is_absolute() else ROOT / p).resolve()
+    return p if p == DATA_ROOT or DATA_ROOT in p.parents else None
+
+
+src_p, out_p = _inside_data(src), _inside_data(out)
+if src_p is None or out_p is None:
+    st.error(f"보안상 폴더는 `{DATA_ROOT}` 아래만 쓸 수 있습니다.")
+    st.stop()
+src, out = str(src_p), str(out_p)
 SPEC = load_target_spec(cfg)
 imgs = list_images(src)
 if not imgs:

@@ -82,7 +82,7 @@ def analyze_target(image: np.ndarray | str | Path, spec: TargetSpec | None = Non
 
 
 def analyze_posture(report: dict, video_path: str | Path, handedness: str = "right", view: str | None = None,
-                    pose_model: str = "yolo11n-pose.pt") -> dict:
+                    pose_model: str | None = None) -> dict:
     from shootcoach.diagnosis.stage1 import Candidate, Stage1Result, ZeroAdjust
     from shootcoach.diagnosis.stage2 import diagnose_stage2
     from shootcoach.pose.keypoints import extract_keypoints

@@ -34,7 +34,7 @@
 ## 실행 명령 모음
 
 ```bash
-source .venv/bin/activate
+source .venv/bin/activate   # 또는 각 명령 앞에 uv run
 streamlit run app/streamlit_app.py                      # 웹앱
 python scripts/analyze.py samples/demo_jerking_low_left.jpg --vlm
 python scripts/evaluate.py --n 200                      # 합성 평가 → docs/results.json

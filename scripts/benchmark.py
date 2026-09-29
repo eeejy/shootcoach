@@ -27,7 +27,7 @@ def chip():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="docs/benchmark.json")
-    ap.add_argument("--video", default="data/real_video/clip_army_5_9.mp4")
+    ap.add_argument("--video", default="samples/real_video/clip_army_5_9.mp4")
     a = ap.parse_args()
     res = {"machine": chip(), "python": platform.python_version()}
     imgs = sorted(Path("samples").glob("demo_*.jpg"))

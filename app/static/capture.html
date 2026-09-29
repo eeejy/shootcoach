@@ -42,6 +42,7 @@
 <p class="muted" style="margin:0 16px 24px">사진은 이 PC로만 전송되어 분석됩니다. 외부 서버로 가지 않습니다.</p>
 <script>
 const $ = (id) => document.getElementById(id);
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
 const statusEl = $("status"), video = $("video"), ov = $("overlay"), shutter = $("shutter");
 let okStreak = 0, busy = false;
 
@@ -73,7 +74,7 @@ function frameBlob(maxSide) {
 async function post(url, field, blob, extra) {
   const fd = new FormData(); fd.append(field, blob, "img.jpg");
   for (const [k, v] of Object.entries(extra || {})) fd.append(k, v);
-  const r = await fetch(url, { method: "POST", body: fd });
+  const r = await fetch(url, { method: "POST", body: fd, headers: { "X-Token": TOKEN } });
   const j = await r.json(); if (!r.ok) throw Object.assign(new Error(j.error || r.status), { data: j }); return j;
 }
 

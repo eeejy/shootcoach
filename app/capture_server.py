@@ -16,7 +16,9 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, Form, UploadFile
+import secrets
+
+from fastapi import FastAPI, File, Form, Header, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +31,10 @@ from shootcoach.target.detect import get_detector  # noqa: E402
 from shootcoach.target.markers import MarkerError, detect_markers  # noqa: E402
 
 SPEC = load_target_spec()
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+# Access token: required by default when run from the command line (see main). Tests import the
+# module with no token. The page receives it in the URL (?t=...) and sends it back as a header.
+TOKEN: str | None = os.environ.get("SHOOTCOACH_TOKEN") or None
 POSITION_KO = {0: "왼쪽 위", 1: "오른쪽 위", 2: "오른쪽 아래", 3: "왼쪽 아래"}
 app = FastAPI(title="취향저격 촬영 가이드")
 _detector = None
@@ -39,6 +45,17 @@ def detector():
     if _detector is None:
         _detector = get_detector("auto")
     return _detector
+
+
+def _check_token(t: str | None) -> bool:
+    return TOKEN is None or (t is not None and secrets.compare_digest(t, TOKEN))
+
+
+async def _read_limited(f: UploadFile) -> bytes:
+    data = await f.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ValueError(f"파일이 너무 큽니다 (최대 {MAX_UPLOAD_BYTES // (1024 * 1024)}MB).")
+    return data
 
 
 def _decode(data: bytes) -> np.ndarray:
@@ -68,7 +85,9 @@ def marker_status(img: np.ndarray) -> dict:
 
 
 @app.get("/")
-def index():
+def index(t: str | None = None):
+    if not _check_token(t):
+        return JSONResponse({"error": "접속 주소에 토큰(?t=...)이 필요합니다. 서버 실행 창에 표시된 주소로 접속하세요."}, status_code=403)
     return FileResponse(ROOT / "app" / "static" / "capture.html")
 
 
@@ -78,9 +97,11 @@ def favicon():
 
 
 @app.post("/api/markers")
-async def api_markers(frame: UploadFile = File(...)):
+async def api_markers(frame: UploadFile = File(...), x_token: str | None = Header(None)):
+    if not _check_token(x_token):
+        return JSONResponse({"error": "토큰이 없거나 틀립니다."}, status_code=403)
     try:
-        img = _decode(await frame.read())
+        img = _decode(await _read_limited(frame))
         if os.environ.get("SHOOTCOACH_DEBUG_FRAMES"):
             cv2.imwrite(os.environ["SHOOTCOACH_DEBUG_FRAMES"], img)
         return marker_status(img)
@@ -90,9 +111,13 @@ async def api_markers(frame: UploadFile = File(...)):
 
 @app.post("/api/analyze")
 async def api_analyze(photo: UploadFile = File(...), handedness: str = Form("right"),
-                      distance_m: float = Form(15.0)):
+                      distance_m: float = Form(15.0), x_token: str | None = Header(None)):
+    if not _check_token(x_token):
+        return JSONResponse({"error": "토큰이 없거나 틀립니다."}, status_code=403)
+    if handedness not in ("right", "left"):
+        return JSONResponse({"error": "handedness는 right 또는 left"}, status_code=400)
     try:
-        img = _decode(await photo.read())
+        img = _decode(await _read_limited(photo))
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     status = marker_status(img)
@@ -124,7 +149,22 @@ def main():
     ap.add_argument("--https", action="store_true")
     ap.add_argument("--cert", default=str(ROOT / "certs" / "dev-cert.pem"))
     ap.add_argument("--key", default=str(ROOT / "certs" / "dev-key.pem"))
+    ap.add_argument("--no-token", action="store_true", help="접속 토큰 끄기 (신뢰할 수 있는 네트워크에서만)")
     a = ap.parse_args()
+    global TOKEN
+    if not a.no_token and TOKEN is None:
+        TOKEN = secrets.token_urlsafe(9)
+    scheme = "https" if a.https else "http"
+    try:
+        import socket
+
+        s_ = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s_.connect(("10.255.255.255", 1))           # no packet is sent; just picks the LAN interface
+        ip = s_.getsockname()[0]
+        s_.close()
+    except OSError:
+        ip = "127.0.0.1"
+    print(f"\n  폰에서 접속: {scheme}://{ip}:{a.port}/" + (f"?t={TOKEN}" if TOKEN else "") + "\n")
     kw = {}
     if a.https:
         if not (Path(a.cert).exists() and Path(a.key).exists()):

@@ -2,16 +2,16 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-# generated / large
+*.egg-info/
+.DS_Store
+# generated / large / private
 data/
 runs/
 out/
 logs/
 research/sources/
-*.pt
-!models/hole_detector.pt
-yolo*.pt
-.DS_Store
-*.egg-info/
-profiles/
 certs/
+profiles/
+# model weights: only the ones in models/ are shipped
+*.pt
+!models/*.pt

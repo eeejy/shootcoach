@@ -1,0 +1,9 @@
+# 보안 기본값: 이 PC에서만 접속. 같은 와이파이의 폰에서 쓰려면
+#   streamlit run app/streamlit_app.py --server.address 0.0.0.0
+# (그 경우 같은 네트워크의 누구나 접속할 수 있으니 신뢰할 수 있는 네트워크에서만)
+[server]
+address = "localhost"
+maxUploadSize = 50          # MB
+
+[browser]
+gatherUsageStats = false    # Streamlit 사용 통계 외부 전송 끔 (로컬 원칙)

@@ -21,7 +21,7 @@ def load_sequence(path: str | Path) -> tuple[KeypointSeq, list[float]]:
     """.npz (xy, conf, fps[, shots]) or a video file. Returns the sequence and shot times."""
     path = Path(path)
     if path.suffix == ".npz":
-        d = np.load(path, allow_pickle=True)
+        d = np.load(path, allow_pickle=False)   # never unpickle files from others
         seq = KeypointSeq(float(d["fps"]), d["xy"], d["conf"])
         shots = [float(x) for x in d["shots"]] if "shots" in d.files else []
     else:

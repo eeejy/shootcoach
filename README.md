@@ -65,22 +65,30 @@
 
 > ⚠️ 수치는 **학습에 쓰지 않은 합성 데이터** 기준이다. 실제 해경 표적지·자세 영상에서의 성능은 아직 측정하지 않았다. 실제 영상에서 확인한 한계는 [리서치 기록](docs/research_log.md) §3에 정리했다.
 
-## 빠른 시작
+## 빠른 시작 — 다른 컴퓨터에서 클론해서 쓰기
 
 ```bash
-# 1) 환경 (Python 3.12 권장)
-uv venv --python 3.12 .venv && source .venv/bin/activate
-uv pip install -e ".[ml,app,dev]"
+git clone https://github.com/eeejy/ai-shooting-coach.git
+cd ai-shooting-coach
+bash scripts/setup.sh                                     # macOS / Linux
+# powershell -ExecutionPolicy Bypass -File scripts\setup.ps1   # Windows
+```
 
-# 2) 웹앱 (같은 와이파이의 폰에서 http://<PC IP>:8501 로 접속 → 사진 업로드)
-streamlit run app/streamlit_app.py
+설치 스크립트가 하는 일: [uv](https://docs.astral.sh/uv/) 설치(없으면) → Python 3.12 가상환경 + 고정 버전 패키지(`uv.lock`) → 모델 체크섬 확인 → 테스트 → 데모 분석 1건.
+모델 4개(`models/`)와 데모 사진·실제 영상 샘플이 저장소에 들어 있어 **인터넷이 없는 내부망에서도** 바로 돌아간다. 학습 장치는 자동 선택된다(NVIDIA → CUDA, 맥 → MPS, 그 외 CPU).
 
-# 3) CLI
-python scripts/analyze.py samples/demo_jerking_low_left.jpg --distance 15 --click-mm-per-10m 5
-python scripts/analyze.py samples/demo_jerking_low_left.jpg --video my_side_view.mp4 --vlm
+```bash
+uv run streamlit run app/streamlit_app.py          # 웹앱 (기본: 이 PC에서만 접속)
+uv run python scripts/analyze.py samples/demo_jerking_low_left.jpg --distance 15 --click-mm-per-10m 5
+uv run python scripts/analyze.py samples/demo_jerking_low_left.jpg --video samples/real_video/clip_army_5_9.mp4
+uv run pytest -q
+```
 
-# 4) 테스트
-pytest -q
+학습 데이터는 저장소에 없다(용량). 필요하면 다시 만든다:
+```bash
+uv run python scripts/make_synthetic_dataset.py --out data/synth          # 링 표적 1,900장 (~1분)
+uv run python scripts/make_synthetic_dataset_v2.py --base data/synth --out data/synth_v2
+uv run python scripts/train_detector.py --data data/synth_v2/data.yaml --model models/hole_detector.pt --epochs 5
 ```
 
 **폰 촬영 가이드 (마커 4개가 보일 때만 셔터가 켜짐):**
@@ -92,6 +100,16 @@ python app/capture_server.py                 # HTTP면 사진 모드 (찍은 뒤
 폰 브라우저는 HTTPS에서만 실시간 카메라를 허용한다. 자체 서명 인증서는 경고를 넘겨야 하고 기기에 따라 카메라가 막힐 수 있다. 그 경우 사진 모드로 자동 전환된다. mkcert 루트 인증서를 폰에 설치하면 경고 없이 동작한다.
 
 **설명 문장(선택):** [Ollama](https://ollama.com) 설치 후 `ollama pull qwen3:8b`(권장) 또는 `ollama pull qwen2.5vl:3b`. 없으면 템플릿 문장을 쓴다.
+
+### 보안 기본값
+
+| 항목 | 기본 동작 |
+|---|---|
+| 웹앱(Streamlit) | **이 PC에서만 접속** (`.streamlit/config.toml`). 폰에서 쓰려면 `--server.address 0.0.0.0` — 같은 네트워크 누구나 접속 가능하므로 신뢰할 수 있는 네트워크에서만. Streamlit 사용 통계 전송은 꺼 둠 |
+| 라벨링 페이지 | `data/` 폴더 아래만 읽고 쓸 수 있음 |
+| 촬영 가이드 서버 | 실행할 때마다 **무작위 접속 토큰**을 만들어 주소(`?t=...`)에 붙임. 토큰 없이는 접속·분석 불가. 업로드 최대 20MB |
+| 모델 파일 | `.pt`는 불러오는 순간 코드가 실행될 수 있음 → `scripts/verify_models.py`로 체크섬 확인, 출처 모르는 `.pt` 사용 금지 |
+| 관절 파일(`.npz`) | pickle 비활성화로 읽음 |
 
 ## 실제 사격장에서 쓰는 법
 
@@ -134,8 +152,8 @@ python scripts/train_detector.py --data data/haegyeong/data.yaml --model models/
 | `app/streamlit_app.py` | 로컬 웹앱 (+ `app/pages/1_라벨링.py`) |
 | `app/capture_server.py` | 폰 촬영 가이드 서버 (+ `app/static/capture.html`) |
 | `scripts/` | 표적지 생성, 합성 데이터, 학습, 평가, 벤치마크, CLI |
-| `models/hole_detector.pt` | 탄공 검출 모델 (YOLO11n, 합성 데이터 학습) |
-| `samples/` | 인쇄용 표적지, 시나리오별 데모 사진(합성) |
+| `models/` | 탄공 검출 모델(최종·v1), 자세 모델, 학습 시작점 + 체크섬 — [models/README.md](models/README.md) |
+| `samples/` | 인쇄용 표적지, 시나리오별 데모 사진(합성), 실제 사격 영상 샘플(퍼블릭 도메인) |
 | `docs/` | 설계, 리서치 기록, 평가 결과, 벤치마크 |
 | `tests/` | 단위·시나리오 테스트 |
 
@@ -152,6 +170,6 @@ python scripts/train_detector.py --data data/haegyeong/data.yaml --model models/
 ## 라이선스·데이터 고지
 
 - 탄공 검출·관절 추출에 **Ultralytics YOLO (AGPL-3.0)**를 쓴다. 외부에 서비스로 배포하려면 AGPL 조건을 따르거나 상용 라이선스를 받아야 한다. 해커톤 이후 정식 도입 단계에서 검토한다.
-- `docs/img/*_pd.jpg`는 미 해병대·미 육군 영상(퍼블릭 도메인, Wikimedia Commons)에서 만든 파생 이미지다. 원본 영상은 저장소에 넣지 않았다.
+- `samples/real_video/`와 `docs/img/*_pd.jpg`는 미 해병대·미 육군 영상(퍼블릭 도메인, Wikimedia Commons)에서 잘라낸 것이다. 출처: [samples/real_video/README.md](samples/real_video/README.md).
 - 교범 PDF 원문은 저장소에 넣지 않았다. 링크는 [docs/rule_sources.md](docs/rule_sources.md)에 있다.
 - 데모 사진은 모두 합성이다. 실제 사람이나 해경 자료는 들어 있지 않다.

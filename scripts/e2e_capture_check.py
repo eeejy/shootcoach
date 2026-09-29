@@ -24,11 +24,11 @@ async def main(y4m: str, url: str = "https://127.0.0.1:8600/"):
         await page.wait_for_function("() => !document.getElementById('shutter').disabled", timeout=60000)
         print(f"셔터 활성화: {time.time() - t0:.1f}s · 상태: {await page.inner_text('#status')}")
         print("사진 모드 버튼 숨김:", not await page.is_visible("#photoRow"))
-        await page.screenshot(path="docs/img/capture_live_guide.png")
+        await page.screenshot(path="out/capture_live_guide.png")
         await page.click("#shutter")
         await page.wait_for_selector("#result .card", timeout=60000)
         print("결과:", (await page.inner_text("#result"))[:260].replace("\n", " | "))
-        await page.screenshot(path="docs/img/capture_result.png", full_page=True)
+        await page.screenshot(path="out/capture_result.png", full_page=True)
         await b.close()
 
 

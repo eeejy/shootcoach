@@ -33,9 +33,9 @@ from shootcoach.target.detect import ClassicHoleDetector, get_detector  # noqa: 
 from shootcoach.target.markers import MarkerError  # noqa: E402
 from shootcoach.target.template import save_printable  # noqa: E402
 
-from app.theme import apply_theme, brand_header, hero  # noqa: E402
+from app.theme import apply_theme, brand_header, hero, local_note, page_icon, section, sidebar_nav, step  # noqa: E402
 
-st.set_page_config(page_title="BullsAI · AI 사격 교정", layout="wide")
+st.set_page_config(page_title="BullsAI · AI 사격 교정", page_icon=page_icon(), layout="wide")
 apply_theme()
 SPEC = load_target_spec()
 
@@ -53,24 +53,29 @@ def stage1_from_dict(d: dict) -> Stage1Result:
 
 with st.sidebar:
     brand_header()
-    st.markdown("###### 분석 설정")
+    sidebar_nav()
+    section("SHOOTER")
     hand = st.radio("주로 쓰는 손", ["right", "left"], format_func=lambda x: "오른손" if x == "right" else "왼손")
+    section("RANGE")
     distance = st.number_input("사격 거리 (m)", 3.0, 50.0, 15.0, 1.0)
     click = st.number_input("조준기 1클릭 값 (mm @10m, 모르면 0)", 0.0, 50.0, 0.0, 0.5)
+    section("ENGINE")
     det_kind = st.selectbox("탄공 검출기", ["auto", "classic"],
                             format_func=lambda x: "딥러닝 (YOLO)" if x == "auto" else "전통 영상처리 (대체)")
     shooter = st.text_input("사수 프로필 (캘리브레이션, 비우면 사용 안 함)", "")
     use_vlm = st.checkbox("로컬 VLM으로 설명 문장 생성", value=False)
     if use_vlm:
         st.caption("Ollama 연결됨" if vlm_available() else "Ollama 미실행 — 템플릿 문장 사용")
-    st.divider()
-    st.caption("모든 분석은 이 PC 안에서만 처리됩니다. 사진·영상은 외부로 전송되지 않습니다.")
+    st.write("")
+    local_note()
 
-hero("한 발 더 정확하게.", "표적지의 탄착군을 읽고 자세 영상으로 원인을 좁혀 보세요. 분석부터 교정 훈련까지 한 화면에서 이어집니다.")
+hero("한 발 더 정확하게.",
+     "표적지 한 장으로 탄착군을 읽고, 자세 영상으로 원인을 하나로 좁힙니다. 채점부터 교정 훈련까지 이 PC 안에서 끝납니다.",
+     chips=[("STAGE 1", "표적지 진단"), ("STAGE 2", "자세 확정"), ("PROCESS", "< 0.1s"), ("DATA", "LOCAL ONLY")])
 tab1, tab2, tab3, tab4 = st.tabs(["표적지 분석", "자세 영상", "설명 문장", "표적지 인쇄"])
 
 with tab1:
-    st.markdown('<span class="ba-step">01 / TARGET ANALYSIS</span>', unsafe_allow_html=True)
+    step("01", "TARGET ANALYSIS")
     c1, c2 = st.columns([1, 1])
     with c1:
         up = st.file_uploader("표적지 사진 (네 모서리 마커가 모두 보이게)", type=["jpg", "jpeg", "png"])
@@ -137,7 +142,7 @@ with tab1:
                     st.success(f"기록했습니다 → profiles/{shooter.strip()}.json (이 PC에만 저장)")
 
 with tab2:
-    st.markdown('<span class="ba-step">02 / POSTURE CHECK</span>', unsafe_allow_html=True)
+    step("02", "POSTURE CHECK")
     rep = st.session_state.get("report")
     if not rep:
         st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
@@ -182,7 +187,7 @@ with tab2:
                          caption=["격발 0.3초 전", "격발 직전", "격발 0.5초 후"], width=220)
 
 with tab3:
-    st.markdown('<span class="ba-step">03 / COACH NOTES</span>', unsafe_allow_html=True)
+    step("03", "COACH NOTES")
     rep = st.session_state.get("report")
     if not rep:
         st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
@@ -198,7 +203,7 @@ with tab3:
         st.caption("VLM은 판정하지 않고, 규칙 엔진 결과를 사람 말로 풀어주기만 합니다.")
 
 with tab4:
-    st.markdown('<span class="ba-step">04 / PRINT TARGET</span>', unsafe_allow_html=True)
+    step("04", "PRINT TARGET")
     st.write("A4 연습용 표적지입니다. **배율 100%(실제 크기)**로 인쇄하세요. 실제 사격장 표적지에는 같은 마커를 스티커로 붙이고 위치를 실측해 설정 파일을 만듭니다.")
     png, pdf = save_printable(SPEC, ROOT / "samples")
     st.download_button("PDF 받기", pdf.read_bytes(), pdf.name, "application/pdf")

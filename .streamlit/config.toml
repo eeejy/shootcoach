@@ -8,11 +8,15 @@ maxUploadSize = 50          # MB
 [browser]
 gatherUsageStats = false    # Streamlit 사용 통계 외부 전송 끔 (로컬 원칙)
 
-# BullsAI 디자인 시스템 — zinc 중립 + 딥블루 accent (AX360 톤)
+[client]
+toolbarMode = "minimal"
+showSidebarNavigation = false   # 기본 메뉴 대신 theme.sidebar_nav() 사용
+
+# BullsAI — SSAT 마크 톤: 다크 네이비 · 스틸 · 오션 블루 · 골드
 [theme]
-base = "light"
-primaryColor = "#1d4ed8"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#fafafa"
-textColor = "#18181b"
+base = "dark"
+primaryColor = "#3479b8"
+backgroundColor = "#0b0e14"
+secondaryBackgroundColor = "#141a24"
+textColor = "#e8ecf1"
 font = "sans serif"

@@ -91,9 +91,18 @@ def index(t: str | None = None):
     return FileResponse(ROOT / "app" / "static" / "capture.html")
 
 
+EMBLEM = ROOT / "app" / "static" / "brand" / "ssat_emblem.png"
+
+
 @app.get("/favicon.ico")
 def favicon():
-    return Response(status_code=204)
+    return FileResponse(EMBLEM) if EMBLEM.exists() else Response(status_code=204)
+
+
+@app.get("/brand/emblem.png")
+def emblem():
+    # 마크 원본 파일을 그대로 전송 (가공 없음). 파일이 없으면 페이지가 텍스트 로고로 대체한다.
+    return FileResponse(EMBLEM, media_type="image/png") if EMBLEM.exists() else Response(status_code=404)
 
 
 @app.post("/api/markers")

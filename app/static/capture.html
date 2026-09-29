@@ -6,35 +6,42 @@
 <title>BullsAI 표적지 촬영</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <style>
-  :root { --accent:#1d4ed8; --accent-hover:#1e40af; --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
-          --fg:#18181b; --muted:#52525b; --bg:#fafafa; --card:#fff; --line:rgba(24,24,27,0.08); }
-  @media (prefers-color-scheme: dark) { :root { --fg:#f4f4f5; --muted:#a1a1aa; --bg:#111113; --card:#1c1c1f; --line:rgba(255,255,255,0.1); } }
+  :root { --bg:#0b0e14; --card:#141a24; --card2:#19212d; --line:#263041; --line2:#344155;
+          --fg:#e8ecf1; --muted:#8e98a7; --blue:#3479b8; --blue2:#4d8fcc; --gold:#d6a936; --gold2:#f0c75a;
+          --ok:#3fb27f; --warn:#e0a13a; --bad:#e0555a; }
   * { box-sizing:border-box; -webkit-font-smoothing:antialiased; }
   [hidden] { display:none !important; }
-  body { margin:0; font-family:"Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; background:var(--bg); color:var(--fg); }
-  header { padding:16px; font-weight:600; font-size:18px; letter-spacing:-0.02em; }
-  header b { color:var(--accent); font-weight:600; }
-  #stage { position:relative; width:100%; max-width:720px; margin:0 auto; background:#000; }
+  body { margin:0; font-family:"Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; color:var(--fg);
+         background:radial-gradient(ellipse 90% 45% at 50% -5%,#1d3a5c66,transparent 70%),
+                    linear-gradient(#ffffff05 1px,transparent 1px) 0 0/48px 48px,
+                    linear-gradient(90deg,#ffffff05 1px,transparent 1px) 0 0/48px 48px, var(--bg); min-height:100vh; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 16px; border-bottom:1px solid var(--line); background:#0b0e14cc; }
+  header img { width:54px; height:auto; border-radius:6px; box-shadow:0 0 0 1px #3a4658, 0 6px 16px #000a; }
+  .brand { font:800 20px/1.1 "Cinzel", Georgia, serif; letter-spacing:.08em; background:linear-gradient(180deg,#f3f5f8,#9aa3b0); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .brand b { background:linear-gradient(180deg,var(--gold2),#b58a24); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .tag { display:block; color:var(--muted); font:600 10px ui-monospace, "JetBrains Mono", monospace; letter-spacing:.18em; margin-top:3px; }
+  #stage { position:relative; width:calc(100% - 32px); max-width:720px; margin:14px auto 0; background:#000; border-radius:12px; overflow:hidden; box-shadow:0 0 0 1px var(--line2), 0 18px 40px #000b; }
   video, #overlay { width:100%; display:block; }
   #overlay { position:absolute; inset:0; height:100%; }
-  #status { margin:10px 16px; padding:12px 14px; border-radius:10px; font-size:16px; font-weight:500; background:var(--card); border:1px solid var(--line); }
-  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  #status { margin:12px 16px; padding:13px 14px; border-radius:10px; font-size:16px; font-weight:600; background:var(--card); border:1px solid var(--line); }
+  .ok { color:var(--ok); border-color:#3fb27f55 !important; } .warn { color:var(--warn); } .bad { color:var(--bad); }
   .row { display:flex; gap:10px; margin:10px 16px; }
-  button, .filebtn { flex:1; min-height:52px; font-size:17px; font-weight:500; border:0; border-radius:10px; background:var(--accent); color:#fff; transition:background 160ms ease; }
-  button:not(:disabled):active { background:var(--accent-hover); }
-  button:disabled { background:#9aa5b1; }
+  button, .filebtn { flex:1; min-height:54px; font-size:17px; font-weight:800; border:1px solid #5d9bd6; border-radius:10px; color:#fff;
+                     background:linear-gradient(180deg,#3479b8,#1f5a92); box-shadow:0 8px 20px #1f5a9255, inset 0 1px 0 #ffffff33; }
+  button:disabled { background:var(--card2); border-color:var(--line2); color:var(--muted); box-shadow:none; }
   .filebtn { display:flex; align-items:center; justify-content:center; }
   input[type=file] { display:none; }
-  select { flex:1; min-height:44px; font-size:16px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); padding:0 10px; }
+  select { flex:1; min-height:46px; font-size:16px; border-radius:10px; border:1px solid var(--line2); background:#0a0e15; color:var(--fg); padding:0 10px; }
   #result { margin:10px 16px 40px; }
-  #result img { width:100%; border-radius:10px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-top:10px; line-height:1.55; }
-  .card b { font-weight:600; }
+  #result img { width:100%; border-radius:10px; border:1px solid var(--line2); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-top:10px; line-height:1.6; }
+  .card b { font-weight:700; }
+  .card:first-of-type { border-top:2px solid var(--gold); }
   .muted { color:var(--muted); font-size:14px; }
 </style>
 </head>
 <body>
-<header>Bulls<b>AI</b> 표적지 촬영</header>
+<header><img id="emblem" src="/brand/emblem.png" alt="SSAT 마크" onerror="this.remove()"><div><span class="brand">BULLS<b>AI</b></span><span class="tag">TARGET CAPTURE · LOCAL ONLY</span></div></header>
 <div id="stage" hidden><video id="video" playsinline muted autoplay></video><canvas id="overlay"></canvas></div>
 <div id="status">준비 중…</div>
 <div class="row">
@@ -62,7 +69,7 @@ function describe(m) {
 function drawQuads(m) {
   const w = ov.width = ov.clientWidth * devicePixelRatio, h = ov.height = ov.clientHeight * devicePixelRatio;
   const g = ov.getContext("2d"); g.clearRect(0, 0, w, h);
-  g.lineWidth = 5 * devicePixelRatio; g.strokeStyle = m.ok ? "#15803d" : "#b45309";
+  g.lineWidth = 5 * devicePixelRatio; g.strokeStyle = m.ok ? "#3fb27f" : "#d6a936";
   for (const q of Object.values(m.quads)) {
     g.beginPath(); q.forEach(([x, y], i) => i ? g.lineTo(x * w, y * h) : g.moveTo(x * w, y * h)); g.closePath(); g.stroke();
   }

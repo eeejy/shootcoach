@@ -12,16 +12,16 @@ EDGES = [(5, 6), (5, 7), (7, 9), (6, 8), (8, 10), (5, 11), (6, 12), (11, 12), (1
 
 def render_frame(seq: KeypointSeq, i: int, label: str = "") -> np.ndarray:
     w, h = seq.frame_size if seq.frame_size[0] else (1280, 1280)
-    img = np.full((h, w, 3), 245, np.uint8)
+    img = np.full((h, w, 3), (26, 20, 14), np.uint8)   # BGR: dark navy, matches the app theme
     k = seq.xy[i]
     for a, b in EDGES:
         if np.isfinite(k[[a, b]]).all():
-            cv2.line(img, tuple(int(v) for v in k[a]), tuple(int(v) for v in k[b]), (60, 60, 60), 6, cv2.LINE_AA)
+            cv2.line(img, tuple(int(v) for v in k[a]), tuple(int(v) for v in k[b]), (214, 206, 201), 6, cv2.LINE_AA)
     for j, p in enumerate(k):
         if np.isfinite(p).all():
-            cv2.circle(img, tuple(int(v) for v in p), 9, (0, 90, 230) if j in (9, 10) else (30, 30, 30), -1, cv2.LINE_AA)
+            cv2.circle(img, tuple(int(v) for v in p), 9, (54, 169, 214) if j in (9, 10) else (163, 149, 139), -1, cv2.LINE_AA)
     if label:
-        cv2.putText(img, label, (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (20, 20, 20), 3, cv2.LINE_AA)
+        cv2.putText(img, label, (30, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (54, 169, 214), 3, cv2.LINE_AA)
     return img
 
 

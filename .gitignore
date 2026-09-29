@@ -15,3 +15,5 @@ profiles/
 # model weights: only the ones in models/ are shipped
 *.pt
 !models/*.pt
+# 부대 마크: 공개 저장소에 올리지 않음 (없으면 텍스트 로고로 대체)
+app/static/brand/

@@ -17,21 +17,25 @@ from shootcoach.labeling import dataset_counts, draw_label_view, list_images, lo
 from shootcoach.target.detect import Hole, get_detector  # noqa: E402
 from shootcoach.target.markers import MarkerError  # noqa: E402
 
-from app.theme import apply_theme, brand_header, hero  # noqa: E402
+from app.theme import apply_theme, brand_header, hero, local_note, page_icon, section, sidebar_nav  # noqa: E402
 
-st.set_page_config(page_title="BullsAI · 탄공 라벨링", layout="wide")
+st.set_page_config(page_title="BullsAI · 탄공 라벨링", page_icon=page_icon(), layout="wide")
 apply_theme()
-hero("탄공 라벨링", "모델이 먼저 찾은 탄공을 확인하고 클릭해서 수정하세요. 모든 작업은 이 PC에서 처리됩니다.", "DATASET / LOCAL LABELING")
+hero("탄공 라벨링", "모델이 먼저 찾은 탄공을 확인하고, 클릭으로 추가·번호로 삭제해 파인튜닝 데이터를 만듭니다. 사진은 이 PC 밖으로 나가지 않습니다.", "SSAT · LABEL STUDIO", chips=[("OUTPUT", "YOLO DATASET"), ("DATA", "LOCAL ONLY")], show_emblem=False)
 
 configs = sorted((ROOT / "configs").glob("*.yaml"))
 with st.sidebar:
     brand_header("LABEL STUDIO")
+    sidebar_nav()
+    section("DATASET")
     cfg = st.selectbox("표적지 설정", configs, format_func=lambda p: p.stem)
     src = st.text_input("원본 사진 폴더", str(ROOT / "data" / "haegyeong" / "raw"))
     out = st.text_input("데이터셋 저장 폴더", str(ROOT / "data" / "haegyeong" / "dataset"))
     rectified = st.checkbox("이미 정면 보정된 사진 (마커 없음)", False)
     display_w = st.slider("화면 표시 폭(px)", 400, 1000, 640, 20)
-    st.write(dataset_counts(out))
+    counts = dataset_counts(out)
+    st.caption(f"학습 {counts['train']['images']}장 · 탄공 {counts['train']['holes']}개 / 검증 {counts['val']['images']}장 · 탄공 {counts['val']['holes']}개")
+    local_note()
 
 DATA_ROOT = (ROOT / "data").resolve()
 

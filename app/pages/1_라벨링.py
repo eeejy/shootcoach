@@ -17,16 +17,15 @@ from shootcoach.labeling import dataset_counts, draw_label_view, list_images, lo
 from shootcoach.target.detect import Hole, get_detector  # noqa: E402
 from shootcoach.target.markers import MarkerError  # noqa: E402
 
-from app.theme import apply_theme, brand_header  # noqa: E402
+from app.theme import apply_theme, brand_header, hero  # noqa: E402
 
 st.set_page_config(page_title="BullsAI · 탄공 라벨링", layout="wide")
 apply_theme()
-brand_header("탄공 라벨링")
-st.title("탄공 라벨링 (로컬)")
-st.caption("해경 사진은 외부 라벨링 서비스에 올리지 않습니다. 모델이 먼저 찍고, 사람이 고칩니다.")
+hero("탄공 라벨링", "모델이 먼저 찾은 탄공을 확인하고 클릭해서 수정하세요. 모든 작업은 이 PC에서 처리됩니다.", "DATASET / LOCAL LABELING")
 
 configs = sorted((ROOT / "configs").glob("*.yaml"))
 with st.sidebar:
+    brand_header("LABEL STUDIO")
     cfg = st.selectbox("표적지 설정", configs, format_func=lambda p: p.stem)
     src = st.text_input("원본 사진 폴더", str(ROOT / "data" / "haegyeong" / "raw"))
     out = st.text_input("데이터셋 저장 폴더", str(ROOT / "data" / "haegyeong" / "dataset"))

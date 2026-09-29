@@ -33,7 +33,7 @@ from shootcoach.target.detect import ClassicHoleDetector, get_detector  # noqa: 
 from shootcoach.target.markers import MarkerError  # noqa: E402
 from shootcoach.target.template import save_printable  # noqa: E402
 
-from app.theme import apply_theme, banner, brand_header, page_icon, section, sidebar_nav, step  # noqa: E402
+from app.theme import apply_theme, brand_header, page_icon, section, sidebar_nav  # noqa: E402
 
 st.set_page_config(page_title="BullsAI · AI 사격 교정", page_icon=page_icon(), layout="wide")
 apply_theme()
@@ -66,17 +66,14 @@ with st.sidebar:
     if use_vlm:
         st.caption("연결됨" if vlm_available() else "Ollama 꺼짐 — 기본 문장 사용")
 
-banner()
 tab1, tab2, tab3, tab4 = st.tabs(["표적지 분석", "자세 영상", "설명 문장", "표적지 인쇄"])
 
 with tab1:
-    step("01", "TARGET ANALYSIS")
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        up = st.file_uploader("표적지 사진", type=["jpg", "jpeg", "png"])
-        demos = sorted(p.name for p in (ROOT / "samples").glob("demo_*.jpg"))
-        demo = st.selectbox("또는 데모 사진", ["(선택 안 함)"] + demos)
-        go = st.button("분석하기", type="primary")
+    demos = sorted(p.name for p in (ROOT / "samples").glob("demo_*.jpg"))
+    i1, i2, i3 = st.columns([5, 4, 1.4], vertical_alignment="bottom")
+    up = i1.file_uploader("표적지 사진", type=["jpg", "jpeg", "png"])
+    demo = i2.selectbox("또는 데모 사진", ["(선택 안 함)"] + demos)
+    go = i3.button("분석", type="primary", width="stretch")
     if go:
         img = None
         if up is not None:
@@ -102,54 +99,58 @@ with tab1:
             except MarkerError as e:
                 st.error(str(e))
     rep = st.session_state.get("report")
-    if rep:
+    if not rep:
+        st.caption("표적지 사진을 올리거나 데모 사진을 고른 뒤 분석을 누르세요.")
+    else:
         g, s1 = rep["group"], rep["stage1"]
-        with c2:
-            st.image(cv2.cvtColor(st.session_state["overlay"], cv2.COLOR_BGR2RGB))
-        m = st.columns(5)
-        m[0].metric("탄 수", g["n"])
-        m[1].metric("총점", g["total_score"])
-        m[2].metric("중심 오프셋", f"{g['offset_mm']:.0f} mm")
-        m[3].metric("평균 반경", f"{g['mean_radius_mm']:.0f} mm")
-        m[4].metric("처리 시간", f"{rep['timings']['total_s']*1000:.0f} ms")
-        st.subheader(f"탄착군: {s1['shape_ko']} · {s1['sector_ko']}")
-        for n in s1["notes"]:
-            st.info(n)
-        if s1["zero_adjust"]:
-            st.success(s1["zero_adjust"]["text_ko"])
-        for i, c in enumerate(s1["candidates"], 1):
-            with st.expander(f"후보 {i}. {c['cause_ko']}  (가중치 {c['score']:.2f})", expanded=i == 1):
-                st.write(c["guidance_ko"])
-                st.write(f"**교정 훈련:** {c['drill_ko']}")
-                st.caption(f"근거: {', '.join(c['sources'])} · 규칙 {', '.join(c['rule_ids'])}"
-                           + (f" · 자세 영상: {c['observable_note']}" if c["observable_note"] else ""))
-        st.download_button("리포트 JSON 받기", to_json(rep), "report.json", "application/json")
-        if shooter.strip():
-            with st.expander("진단 세션으로 기록 (캘리브레이션)"):
-                causes = load_causes()
-                cid = st.selectbox("일부러 낸 오류", sorted(causes), format_func=lambda k: causes[k].cause_ko)
-                if st.button("이 표적지를 기록"):
-                    prof_path = ROOT / "profiles" / f"{shooter.strip()}.json"
-                    prof = ShooterProfile.load(prof_path) if prof_path.exists() else ShooterProfile(shooter.strip(), hand)
-                    prof.add_session(cid, group_stats(st.session_state["holes"], SPEC))
-                    prof.save(prof_path)
-                    st.success(f"기록했습니다 → profiles/{shooter.strip()}.json (이 PC에만 저장)")
+        left, right = st.columns([5, 6], gap="large")
+        with left:
+            st.image(cv2.cvtColor(st.session_state["overlay"], cv2.COLOR_BGR2RGB), width="stretch")
+            st.download_button("리포트 JSON", to_json(rep), "report.json", "application/json", width="stretch")
+        with right:
+            m = st.columns(4)
+            m[0].metric("탄 수", g["n"])
+            m[1].metric("총점", g["total_score"])
+            m[2].metric("오프셋 mm", f"{g['offset_mm']:.0f}")
+            m[3].metric("반경 mm", f"{g['mean_radius_mm']:.0f}")
+            st.subheader(f"{s1['shape_ko']} · {s1['sector_ko']}")
+            if s1["zero_adjust"]:
+                st.success(s1["zero_adjust"]["text_ko"])
+            for n in s1["notes"]:
+                st.info(n)
+            for i, c in enumerate(s1["candidates"], 1):
+                with st.expander(f"{i}. {c['cause_ko']}  ·  {c['score']:.2f}", expanded=i == 1):
+                    st.write(c["guidance_ko"])
+                    st.write(f"**교정 훈련:** {c['drill_ko']}")
+                    st.caption(f"근거: {', '.join(c['sources'])} · 규칙 {', '.join(c['rule_ids'])}"
+                               + (f" · 자세 영상: {c['observable_note']}" if c["observable_note"] else ""))
+            if shooter.strip():
+                with st.expander("진단 세션으로 기록 (캘리브레이션)"):
+                    causes = load_causes()
+                    cid = st.selectbox("일부러 낸 오류", sorted(causes), format_func=lambda k: causes[k].cause_ko)
+                    if st.button("이 표적지를 기록"):
+                        prof_path = ROOT / "profiles" / f"{shooter.strip()}.json"
+                        prof = ShooterProfile.load(prof_path) if prof_path.exists() else ShooterProfile(shooter.strip(), hand)
+                        prof.add_session(cid, group_stats(st.session_state["holes"], SPEC))
+                        prof.save(prof_path)
+                        st.success(f"기록했습니다 → profiles/{shooter.strip()}.json")
+            st.caption(f"처리 {rep['timings']['total_s'] * 1000:.0f} ms")
 
 with tab2:
-    step("02", "POSTURE CHECK")
     rep = st.session_state.get("report")
     if not rep:
         st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
     else:
-        vid = st.file_uploader("자세 영상", type=["mp4", "mov", "m4v"])
-        sim = st.selectbox("또는 데모 영상",
+        i1, i2, i3 = st.columns([5, 4, 1.4], vertical_alignment="bottom")
+        vid = i1.file_uploader("자세 영상", type=["mp4", "mov", "m4v"])
+        sim = i2.selectbox("또는 데모 영상",
                            ["(선택 안 함)", "정상 자세", "격발 직전 총구 하강", "격발 직전 총구 들림 + 어깨 긴장",
                             "격발 직후 팔 내림", "조준 중 호흡 흔들림"])
-        if st.button("자세 분석", type="primary"):
+        if i3.button("분석", type="primary", width="stretch", key="pose_go"):
             if vid is not None:
                 with tempfile.NamedTemporaryFile(suffix=Path(vid.name).suffix, delete=False) as f:
                     f.write(vid.read())
-                with st.spinner("관절 추출 중… (이 PC에서 처리)"):
+                with st.spinner("관절 추출 중…"):
                     analyze_posture(rep, f.name, hand)
                 st.session_state["stage2_video"] = f.name
             elif sim != "(선택 안 함)":
@@ -162,25 +163,29 @@ with tab2:
                 st.session_state["stage2_seq"] = seq
         s2 = rep.get("stage2")
         if s2:
-            st.subheader(s2["final_ko"])
-            st.caption(f"촬영 방향: {'측면' if s2['view'] == 'side' else '후방/정면'} · 격발 {len(s2['shot_times'])}회 "
-                       f"({s2['shot_source']})")
-            st.dataframe(pd.DataFrame([{"원인 후보": v["cause_ko"], "판정": v["status_ko"], "신뢰도": v["confidence"],
-                                        "근거": " / ".join(v["evidence"])} for v in s2["verdicts"]]),
-                         hide_index=True, width="stretch")
-            for x in s2.get("extra_findings", []):
-                st.warning("추가 관찰: " + x)
-            for n in s2.get("notes", []):
-                st.caption(n)
             seq = st.session_state.get("stage2_seq")
-            if seq is not None:
-                _, pitch, _ = arm_series(seq, hand)
-                st.line_chart(pd.DataFrame({"팔뚝 각도(°)": pitch}, index=np.round(seq.t, 2)), height=220, color="#cf3a30")
-                st.image([cv2.cvtColor(k, cv2.COLOR_BGR2RGB) for k in key_frames(seq, s2["shot_times"][0])],
-                         caption=["격발 0.3초 전", "격발 직전", "격발 0.5초 후"], width=220)
+            left, right = st.columns([6, 5], gap="large")
+            with left:
+                st.subheader(s2["final_ko"])
+                st.caption(f"{'측면' if s2['view'] == 'side' else '후방/정면'} 촬영 · 격발 {len(s2['shot_times'])}회")
+                st.dataframe(pd.DataFrame([{"원인 후보": v["cause_ko"], "판정": v["status_ko"], "신뢰도": v["confidence"],
+                                            "근거": " / ".join(v["evidence"])} for v in s2["verdicts"]]),
+                             hide_index=True, width="stretch")
+                for x in s2.get("extra_findings", []):
+                    st.warning("추가 관찰: " + x)
+                if seq is not None:
+                    _, pitch, _ = arm_series(seq, hand)
+                    st.line_chart(pd.DataFrame({"팔뚝 각도(°)": pitch}, index=np.round(seq.t, 2)), height=200, color="#cf3a30")
+            with right:
+                if seq is not None and s2["shot_times"]:
+                    f = key_frames(seq, s2["shot_times"][0])
+                    cols = st.columns(3)
+                    for col, im, cap in zip(cols, f, ["0.3초 전", "격발 직전", "0.5초 후"]):
+                        col.image(cv2.cvtColor(im, cv2.COLOR_BGR2RGB), caption=cap, width="stretch")
+                for n in s2.get("notes", []):
+                    st.caption(n)
 
 with tab3:
-    step("03", "COACH NOTES")
     rep = st.session_state.get("report")
     if not rep:
         st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
@@ -195,8 +200,12 @@ with tab3:
                    + (f" · 오류: {ex['error']}" if ex.get("error") else ""))
 
 with tab4:
-    step("04", "PRINT TARGET")
-    st.caption("A4 · 배율 100%로 인쇄")
-    png, pdf = save_printable(SPEC, ROOT / "samples")
-    st.download_button("PDF 받기", pdf.read_bytes(), pdf.name, "application/pdf")
-    st.image(str(png), width=320)
+    @st.cache_resource
+    def printable():
+        return save_printable(SPEC, Path(tempfile.gettempdir()) / "bullsai_target")   # 저장소 파일을 덮어쓰지 않음
+
+    png, pdf = printable()
+    c1, c2 = st.columns([1, 2])
+    c1.image(str(png), width="stretch")
+    c2.caption("A4 · 배율 100%로 인쇄")
+    c2.download_button("PDF 받기", pdf.read_bytes(), pdf.name, "application/pdf", type="primary")

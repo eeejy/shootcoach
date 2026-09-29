@@ -25,14 +25,13 @@ page_title("탄공 라벨링")
 
 configs = sorted((ROOT / "configs").glob("*.yaml"))
 with st.sidebar:
-    brand_header("LABEL STUDIO")
+    brand_header()
     sidebar_nav()
     section("DATASET")
     cfg = st.selectbox("표적지 설정", configs, format_func=lambda p: p.stem)
     src = st.text_input("원본 사진 폴더", str(ROOT / "data" / "haegyeong" / "raw"))
     out = st.text_input("데이터셋 저장 폴더", str(ROOT / "data" / "haegyeong" / "dataset"))
     rectified = st.checkbox("이미 정면 보정된 사진 (마커 없음)", False)
-    display_w = st.slider("화면 표시 폭(px)", 400, 1000, 640, 20)
     counts = dataset_counts(out)
     st.caption(f"학습 {counts['train']['images']}장 · 탄공 {counts['train']['holes']}개 / 검증 {counts['val']['images']}장 · 탄공 {counts['val']['holes']}개")
 
@@ -63,7 +62,7 @@ def detector():
     return get_detector("auto")
 
 
-idx = st.number_input(f"사진 번호 (1–{len(imgs)})", 1, len(imgs), st.session_state.get("idx", 1)) - 1
+idx = min(max(st.session_state.get("idx", 0), 0), len(imgs) - 1)
 path = imgs[idx]
 key = f"{cfg.stem}:{path.name}"
 if st.session_state.get("key") != key:
@@ -73,38 +72,48 @@ if st.session_state.get("key") != key:
         st.error(f"{path.name}: {e}")
         st.stop()
     saved = load_sample(out, path.stem, SPEC)
-    st.session_state.update(key=key, rect=rect, holes=saved if saved is not None else holes, click=None)
-    if saved is not None:
-        st.info("이미 저장된 라벨을 불러왔습니다.")
+    st.session_state.update(key=key, rect=rect, holes=saved if saved is not None else holes, click=None,
+                            loaded_saved=saved is not None)
 
 rect, holes = st.session_state["rect"], st.session_state["holes"]
-c1, c2 = st.columns([3, 2])
+
+nav1, nav2, nav3 = st.columns([1, 6, 1], vertical_alignment="center")
+if nav1.button("◀ 이전", width="stretch", disabled=idx == 0):
+    st.session_state["idx"] = idx - 1
+    st.rerun()
+nav2.markdown(f"**{idx + 1} / {len(imgs)}** · {path.name} · 탄공 **{len(holes)}개**"
+              + (" · 저장된 라벨" if st.session_state.get("loaded_saved") else ""))
+if nav3.button("다음 ▶", width="stretch", disabled=idx >= len(imgs) - 1):
+    st.session_state["idx"] = idx + 1
+    st.rerun()
+
+c1, c2 = st.columns([7, 3], gap="large")
 with c1:
     view = draw_label_view(rect, holes, SPEC)
-    scale = display_w / view.shape[1]
-    small = cv2.resize(view, (display_w, int(view.shape[0] * scale)))
-    click = streamlit_image_coordinates(cv2.cvtColor(small, cv2.COLOR_BGR2RGB), key=f"img:{key}")
+    send_w = min(1000, view.shape[1])
+    small = cv2.resize(view, (send_w, int(view.shape[0] * send_w / view.shape[1])))
+    click = streamlit_image_coordinates(cv2.cvtColor(small, cv2.COLOR_BGR2RGB), width="stretch", key=f"img:{key}")
     if click and click != st.session_state.get("click"):
         st.session_state["click"] = click
-        x_mm = click["x"] / scale / SPEC.px_per_mm
-        y_mm = click["y"] / scale / SPEC.px_per_mm
-        holes.append(Hole(x_mm, y_mm, SPEC.bullet_diameter_mm / 2, conf=1.0))
+        shown_w = click.get("width") or send_w           # displayed width in the browser
+        k = view.shape[1] / shown_w / SPEC.px_per_mm      # displayed px → mm
+        holes.append(Hole(click["x"] * k, click["y"] * k, SPEC.bullet_diameter_mm / 2, conf=1.0))
         st.rerun()
 with c2:
-    st.subheader(f"{path.name} · 탄공 {len(holes)}개")
-    st.caption("이미지 클릭 = 탄공 추가")
-    drop = st.multiselect("지울 번호 (오검출)", list(range(1, len(holes) + 1)))
-    if st.button("선택 삭제") and drop:
+    st.caption("사진 클릭 = 탄공 추가 · 주황 = 모델, 초록 = 추가")
+    drop = st.multiselect("지울 번호", list(range(1, len(holes) + 1)), placeholder="오검출 번호 선택")
+    b1, b2 = st.columns(2)
+    if b1.button("삭제", width="stretch") and drop:
         st.session_state["holes"] = [h for i, h in enumerate(holes, 1) if i not in set(drop)]
         st.rerun()
-    if st.button("마지막 추가 취소") and holes:
+    if b2.button("추가 취소", width="stretch") and holes:
         holes.pop()
         st.rerun()
-    if st.button("저장 후 다음", type="primary"):
+    if st.button("저장 후 다음", type="primary", width="stretch"):
         p = save_sample(rect, holes, SPEC, out, path.stem)
-        st.success(f"저장: {p.relative_to(ROOT) if p.is_relative_to(ROOT) else p}")
-        st.session_state["idx"] = min(len(imgs), idx + 2)
+        st.toast(f"저장: {p.name}")
+        st.session_state["idx"] = min(len(imgs) - 1, idx + 1)
         st.rerun()
-    st.divider()
-    st.code(f"python scripts/train_detector.py --data {Path(out) / 'data.yaml'} --model models/hole_detector.pt --epochs 20 --name haegyeong",
-            language="bash")
+    with st.expander("학습 명령"):
+        st.code(f"python scripts/train_detector.py --data {Path(out) / 'data.yaml'} --model models/hole_detector.pt --epochs 20 --name haegyeong",
+                language="bash")

@@ -48,7 +48,7 @@ def detector():
     return get_photo_detector()
 
 
-POSE_MODELS = {"fast": "yolo11n-pose.pt", "precise": "yolo11m-pose.pt"}   # 빠름 약 21ms/프레임, 정밀 약 76ms (관절 떨림 약 절반)
+POSE_MODELS = {"precise": "yolo11m-pose.pt", "fast": "yolo11n-pose.pt"}   # 첫 항목이 기본. 정밀 약 77ms/프레임(관절 떨림 약 절반), 빠름 약 21ms
 
 
 def stage1_from_dict(d: dict) -> Stage1Result:

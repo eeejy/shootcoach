@@ -11,8 +11,8 @@ import numpy as np
 
 from shootcoach.config import TargetSpec, load_target_spec
 from shootcoach.diagnosis.stage1 import diagnose_stage1
-from shootcoach.target.detect import ClassicHoleDetector, Hole
-from shootcoach.target.locate import TargetNotFound, locate_target, rectified_view
+from shootcoach.target.detect import Hole
+from shootcoach.target.locate import locate_target, rectified_view
 from shootcoach.target.scoring import group_stats
 
 DEFAULT_SPEC = "configs/kcg_circle.yaml"
@@ -25,15 +25,12 @@ def default_spec() -> TargetSpec:
 
 
 def get_photo_detector():
-    """Photo-trained YOLO when its weights exist, else the classic (template) detector."""
+    """The photo-trained hole detector (models/hole_detector_photo.pt)."""
     from shootcoach.target.photo import PHOTO_WEIGHTS, PhotoHoleDetector
 
-    if PHOTO_WEIGHTS.exists():
-        try:
-            return PhotoHoleDetector()
-        except Exception:  # noqa: BLE001 — torch missing etc.
-            pass
-    return ClassicHoleDetector()
+    if not PHOTO_WEIGHTS.exists():
+        raise FileNotFoundError(f"탄공 모델이 없습니다: {PHOTO_WEIGHTS} (scripts/setup.sh 로 설치)")
+    return PhotoHoleDetector()
 
 
 @dataclass
@@ -106,13 +103,11 @@ def analyze_target(image: np.ndarray | str | Path, spec: TargetSpec | None = Non
     if holes_override is not None:
         holes = list(holes_override)
         det_log = {"source": "instructor"}
-    elif hasattr(det, "raw"):                                   # photo model: detect on the original photo
+    else:                                                       # detect on the original photo
         px, det_log = detect_holes_px(det, image, frame, spec, expected_shots)
         pts = frame.paper_mm(np.array([[h.x, h.y] for h in px]).reshape(-1, 2), spec)
         holes = [Hole(float(x), float(y), max(spec.bullet_diameter_mm / 2 * 0.6, h.r * frame.mm_per_px), h.conf)
                  for (x, y), h in zip(pts, px)]
-    else:                                                       # classic detector works on the flattened target
-        holes = det.detect(rect, spec)
     timings["detect_s"] = time.perf_counter() - t1
     t2 = time.perf_counter()
     st = group_stats(holes, spec)
@@ -178,8 +173,6 @@ def count_holes(image: np.ndarray, detector=None, expected_shots: int | None = N
     영역 채점(2·5·4점)은 속사 표적 규정을 받은 뒤 추가한다.
     """
     det = detector if detector is not None else get_photo_detector()
-    if not hasattr(det, "raw"):
-        raise TargetNotFound("원형 표적을 찾지 못했습니다. (탄공 개수 세기는 AI 모델이 있어야 합니다)")
     px, log = det.detect(image, expected_shots)
     vis = image.copy()
     lw = max(2, image.shape[1] // 400)

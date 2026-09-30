@@ -10,12 +10,10 @@ import subprocess
 import time
 from pathlib import Path
 
-import cv2
 
 from shootcoach.explain.vlm import installed_models, vlm_explanation
 from shootcoach.pipeline import analyze_target
 from shootcoach.pipeline import get_photo_detector
-from shootcoach.target.detect import ClassicHoleDetector
 
 
 def chip():
@@ -33,17 +31,20 @@ def main():
     a = ap.parse_args()
     res = {"machine": chip(), "python": platform.python_version()}
     imgs = sorted(Path(a.photos).glob("*.jp*g"))
-    for name, det in (("photo_model", get_photo_detector()), ("classic", ClassicHoleDetector())):
-        analyze_target(str(imgs[0]), detector=det)                       # warm-up
-        ts = [analyze_target(str(p), detector=det).report["timings"]["total_s"] for p in imgs for _ in range(3)]
-        res[f"target_pipeline_{name}_ms"] = {"median": round(1000 * stats.median(ts), 1), "max": round(1000 * max(ts), 1)}
+    det = get_photo_detector()
+    analyze_target(str(imgs[0]), detector=det)                           # warm-up
+    ts = [analyze_target(str(p), detector=det).report["timings"]["total_s"] for p in imgs for _ in range(3)]
+    res["target_pipeline_ms"] = {"median": round(1000 * stats.median(ts), 1), "max": round(1000 * max(ts), 1)}
     if Path(a.video).exists():
+        from shootcoach.device import model_path
         from shootcoach.pose.keypoints import extract_keypoints
-        t0 = time.perf_counter()
-        seq = extract_keypoints(a.video)
-        dt = time.perf_counter() - t0
-        res["pose_ms_per_frame"] = round(1000 * dt / len(seq.xy), 1)
-        res["pose_clip"] = {"frames": len(seq.xy), "fps": round(seq.fps, 2), "seconds": round(dt, 2)}
+        for label, m in (("fast", "yolo11n-pose.pt"), ("precise", "yolo11m-pose.pt")):
+            extract_keypoints(a.video, model_path(m), max_frames=5)          # warm-up
+            t0 = time.perf_counter()
+            seq = extract_keypoints(a.video, model_path(m))
+            dt = time.perf_counter() - t0
+            res[f"pose_{label}"] = {"model": m, "ms_per_frame": round(1000 * dt / len(seq.xy), 1),
+                                    "frames": len(seq.xy), "fps": round(seq.fps, 2), "seconds": round(dt, 2)}
     rep = analyze_target(str(Path("samples/demo_low_left.jpg")), detector=get_photo_detector())
     res["llm"] = {}
     for m in ("qwen3:8b", "qwen2.5vl:3b"):

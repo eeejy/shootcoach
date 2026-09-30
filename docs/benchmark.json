@@ -1,19 +1,23 @@
 {
   "machine": "Apple M4",
   "python": "3.12.14",
-  "target_pipeline_photo_model_ms": {
-    "median": 467.0,
-    "max": 502.0
+  "target_pipeline_ms": {
+    "median": 460.5,
+    "max": 478.0
   },
-  "target_pipeline_classic_ms": {
-    "median": 237.0,
-    "max": 260.0
-  },
-  "pose_ms_per_frame": 21.0,
-  "pose_clip": {
+  "pose_fast": {
+    "model": "yolo11n-pose.pt",
+    "ms_per_frame": 21.2,
     "frames": 100,
     "fps": 25.0,
-    "seconds": 2.1
+    "seconds": 2.12
+  },
+  "pose_precise": {
+    "model": "yolo11m-pose.pt",
+    "ms_per_frame": 77.4,
+    "frames": 100,
+    "fps": 25.0,
+    "seconds": 7.74
   },
   "llm": {}
 }

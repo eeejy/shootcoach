@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from shootcoach.diagnosis.stage2 import load_signals
-from shootcoach.pose.features import arm_series, detect_view, shot_features
+from shootcoach.pose.features import arm_series, shot_features
 from shootcoach.pose.keypoints import KeypointSeq
 from shootcoach.pose.shots import motion_shot_times
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 
 from shootcoach.explain.vlm import template_explanation, vlm_explanation
-from shootcoach.pipeline import analyze_posture, analyze_target, to_json
+from shootcoach.pipeline import analyze_posture, analyze_target, default_spec, to_json
 
 ap = argparse.ArgumentParser()
 ap.add_argument("image")
@@ -48,7 +48,7 @@ if a.prev:
     from shootcoach.target.sequence import new_holes
 
     prev = analyze_target(a.prev, handedness=a.hand)
-    fresh = new_holes(prev.holes, res.holes, match_mm=load_target_spec().bullet_diameter_mm * 0.35)
+    fresh = new_holes(prev.holes, res.holes, match_mm=default_spec().bullet_diameter_mm * 0.35)
     rep["new_holes_since_prev"] = [h.as_dict() for h in fresh]
     print(f"[회차] 이전 사진 대비 새 탄공 {len(fresh)}개")
 if a.video:

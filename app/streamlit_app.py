@@ -20,6 +20,7 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from shootcoach.device import model_path  # noqa: E402
 from shootcoach.diagnosis.calibration import ShooterProfile as CalProfile  # noqa: E402
 from shootcoach.diagnosis.calibration import apply_profile  # noqa: E402
 from shootcoach.diagnosis.rules import load_causes  # noqa: E402
@@ -30,7 +31,7 @@ from shootcoach.pipeline import analyze_posture, analyze_target, count_holes, de
 from shootcoach.pose.features import arm_series  # noqa: E402
 from shootcoach.pose.render import key_frames  # noqa: E402
 from shootcoach.pose.simulate import Faults, simulate_side_view  # noqa: E402
-from shootcoach.target.detect import ClassicHoleDetector, Hole  # noqa: E402
+from shootcoach.target.detect import Hole  # noqa: E402
 from shootcoach.target.locate import TargetNotFound  # noqa: E402
 from shootcoach.target.scoring import group_stats  # noqa: E402
 
@@ -43,8 +44,11 @@ FEEDBACK = ROOT / "profiles" / "instructor_feedback.jsonl"
 
 
 @st.cache_resource
-def detector(kind: str):
-    return ClassicHoleDetector() if kind == "classic" else get_photo_detector()
+def detector():
+    return get_photo_detector()
+
+
+POSE_MODELS = {"fast": "yolo11n-pose.pt", "precise": "yolo11m-pose.pt"}   # 빠름 약 21ms/프레임, 정밀 약 76ms (관절 떨림 약 절반)
 
 
 def stage1_from_dict(d: dict) -> Stage1Result:
@@ -72,8 +76,8 @@ with st.sidebar:
     grip_fit = st.radio("그립 크기", ["ok", "too_large", "too_small"], horizontal=True,
                         format_func=lambda x: {"ok": "맞음", "too_large": "손에 큼", "too_small": "손에 작음"}[x])
     section("ENGINE")
-    det_kind = st.selectbox("탄공 검출", ["auto", "classic"],
-                            format_func=lambda x: "AI 모델" if x == "auto" else "영상처리 (대체)")
+    pose_kind = st.selectbox("자세 분석 모델", list(POSE_MODELS),
+                             format_func=lambda x: {"fast": "빠름", "precise": "정밀 (약 3배 느림)"}[x])
     shooter = st.text_input("사수 이름 (기록용, 선택)", "")
     use_vlm = st.checkbox("AI 설명 문장", value=False)
     if use_vlm:
@@ -83,7 +87,7 @@ PROFILE = ShooterProfile(hand_size, finger, "high" if fatigue else "low", zero_o
 
 
 def run_analysis(img: np.ndarray, holes: list[Hole] | None = None) -> None:
-    res = analyze_target(img, SPEC, hand, distance, None, detector(det_kind), expected_shots=int(shots), holes_override=holes)
+    res = analyze_target(img, SPEC, hand, distance, None, detector(), expected_shots=int(shots), holes_override=holes)
     st_ = group_stats(res.holes, SPEC)
     s1 = diagnose_stage1(st_, SPEC, hand, distance, profile=PROFILE)
     if shooter.strip():
@@ -118,7 +122,7 @@ with tab1:
             except TargetNotFound as e:
                 st.session_state.pop("report", None)
                 try:
-                    st.session_state["count_only"] = count_holes(img, detector(det_kind), int(shots))
+                    st.session_state["count_only"] = count_holes(img, detector(), int(shots))
                 except TargetNotFound:
                     st.error(str(e))
     rep = st.session_state.get("report")
@@ -216,7 +220,7 @@ with tab2:
                 with tempfile.NamedTemporaryFile(suffix=Path(vid.name).suffix, delete=False) as f:
                     f.write(vid.read())
                 with st.spinner("관절 추출 중…"):
-                    analyze_posture(rep, f.name, hand)
+                    analyze_posture(rep, f.name, hand, pose_model=model_path(POSE_MODELS[pose_kind]))
                 st.session_state["stage2_video"] = f.name
             elif sim != "(선택 안 함)":
                 faults = {"정상 자세": Faults(), "격발 직전 총구 하강": Faults(dip_deg=4),

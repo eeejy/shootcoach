@@ -3,7 +3,8 @@
 | 파일 | 용도 | 출처 | 학습 데이터 |
 |---|---|---|---|
 | `hole_detector_photo.pt` | **탄공 검출 (기본)** — 원본 사진을 그대로 넣는다 | 이 프로젝트에서 학습 (YOLO11s, 입력 960px) | Roboflow 공개 실사진 4종 3,699장 / 탄공 18,441개 (README 표) |
-| `yolo11n-pose.pt` | 자세 관절 17개 추출 | Ultralytics 공식 배포 모델 | COCO keypoints |
+| `yolo11n-pose.pt` | 자세 관절 17개 추출 — **빠름** (기본, 프레임당 약 21ms) | Ultralytics 공식 배포 모델 | COCO keypoints |
+| `yolo11m-pose.pt` | 자세 관절 17개 추출 — **정밀** (약 76ms, 관절 위치 떨림 약 절반) | Ultralytics 공식 배포 모델 | COCO keypoints |
 | `yolo11s.pt` | 탄공 모델을 새로 학습할 때 시작점 | Ultralytics 공식 배포 모델 | COCO |
 | `yolo11n.pt` | 가벼운 시작점 (예비) | Ultralytics 공식 배포 모델 | COCO |
 

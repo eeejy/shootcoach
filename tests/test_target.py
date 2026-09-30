@@ -2,8 +2,8 @@ import numpy as np
 
 from shootcoach.config import load_target_spec
 from shootcoach.pipeline import analyze_target, default_spec
-from shootcoach.synth import ShotGroupSpec, draw_holes, make_synth_target, sample_group, simulate_photo
-from shootcoach.target.detect import ClassicHoleDetector, Hole
+from shootcoach.synth import draw_holes, make_synth_target, simulate_photo
+from shootcoach.target.detect import Hole
 from shootcoach.target.locate import TargetNotFound, locate_target
 from shootcoach.target.scoring import clock_of, sector_of
 from shootcoach.target.sequence import new_holes
@@ -51,21 +51,11 @@ def test_locate_fails_without_target():
 
 
 def test_pipeline_runs_on_demo_and_respects_override():
-    r = analyze_target("samples/demo_low_left.jpg", detector=ClassicHoleDetector())
-    assert r.report["frame"]["fill"] > 0.8
+    r = analyze_target("samples/demo_low_left.jpg", expected_shots=10)
+    assert r.report["frame"]["fill"] > 0.8 and r.report["group"]["n"] >= 7
     holes = [Hole(SPEC.center_mm[0], SPEC.center_mm[1], 4.5)] * 3
     r2 = analyze_target("samples/demo_low_left.jpg", holes_override=holes)
     assert r2.report["group"]["n"] == 3 and r2.report["group"]["total_score"] == 30
-
-
-def test_classic_detector_on_clean_rectified_target():
-    rng = np.random.default_rng(5)
-    holes = sample_group(A4, ShotGroupSpec(6, (15, -10), (12, 12)), rng)
-    rect = draw_holes(render_target(A4), holes * A4.px_per_mm, np.full(6, 4.5 * A4.px_per_mm), rng, backer="cardboard")
-    found = ClassicHoleDetector().detect(rect, A4)
-    P = np.array([[h.x_mm, h.y_mm] for h in found])
-    hit = sum(1 for g in holes if np.min(np.hypot(*(P - g).T)) < 4.5)
-    assert hit >= 5
 
 
 def test_clock_and_sector():

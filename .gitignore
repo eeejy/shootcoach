@@ -19,3 +19,6 @@ profiles/
 app/static/brand/
 # secrets
 .env
+.vercel
+.env*
+vendor/opencv-python/build/

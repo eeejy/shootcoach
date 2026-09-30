@@ -18,6 +18,8 @@ dependencies = [
   "fastapi",
   "python-multipart",
   "ultralytics>=8.3",
+  "torch",
+  "torchvision",
 ]
 
 [project.optional-dependencies]
@@ -41,3 +43,10 @@ entrypoint = "app.capture_server:app"
 # that metadata-only dependency to a local shim so Linux servers install the
 # headless build that provides the same `cv2` module without X11 libraries.
 opencv-python = { path = "vendor/opencv-python" }
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

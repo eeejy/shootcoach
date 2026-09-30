@@ -1,5 +1,5 @@
 numpy
-opencv-contrib-python>=4.8
+opencv-contrib-python-headless>=4.8
 pyyaml
 pandas
 requests

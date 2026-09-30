@@ -9,7 +9,8 @@ description = "취향저격 — 표적지·자세 융합 AI 사격 교정 MVP"
 requires-python = ">=3.10"
 dependencies = [
   "numpy",
-  "opencv-contrib-python",
+  "opencv-contrib-python-headless",
+  "opencv-python",
   "pyyaml",
   "pandas",
   "requests",
@@ -31,3 +32,9 @@ pythonpath = ["."]
 
 [tool.vercel]
 entrypoint = "app.capture_server:app"
+
+[tool.uv.sources]
+# Ultralytics requires the GUI OpenCV distribution by package name. Redirect
+# that metadata-only dependency to a local shim so Linux servers install the
+# headless build that provides the same `cv2` module without X11 libraries.
+opencv-python = { path = "vendor/opencv-python" }

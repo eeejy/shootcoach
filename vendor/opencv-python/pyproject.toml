@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opencv-python"
+version = "5.0.0.93"
+description = "Headless OpenCV compatibility shim for server deployments"
+requires-python = ">=3.10"
+dependencies = ["opencv-contrib-python-headless>=4.8"]

@@ -244,7 +244,7 @@ with tab2:
                     st.warning("추가 관찰: " + x)
                 if seq is not None:
                     _, pitch, _ = arm_series(seq, hand)
-                    st.line_chart(pd.DataFrame({"팔뚝 각도(°)": pitch}, index=np.round(seq.t, 2)), height=200, color="#cf3a30")
+                    st.line_chart(pd.DataFrame({"팔뚝 각도(°)": pitch}, index=np.round(seq.t, 2)), height=200, color="#5fc2ec")
             with right:
                 if seq is not None and s2["shot_times"]:
                     frames = key_frames(seq, s2["shot_times"][0])

@@ -12,11 +12,11 @@ gatherUsageStats = false    # Streamlit 사용 통계 외부 전송 끔 (로컬 
 toolbarMode = "minimal"
 showSidebarNavigation = false   # 기본 메뉴 대신 theme.sidebar_nav() 사용
 
-# BullsAI — 앱 로고 톤: 차콜 · 스틸 · 레드
+# BullsAI — 앱 로고 톤: 차콜 · 스틸 · 골드 · 시안
 [theme]
 base = "dark"
-primaryColor = "#b3261e"
-backgroundColor = "#161618"
-secondaryBackgroundColor = "#1f1f22"
-textColor = "#ecebe8"
+primaryColor = "#22566f"
+backgroundColor = "#0e1115"
+secondaryBackgroundColor = "#171b20"
+textColor = "#eef1f3"
 font = "sans serif"

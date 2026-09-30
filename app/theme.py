@@ -1,4 +1,4 @@
-"""BullsAI theme — 앱 로고 톤: 차콜 · 스틸 · 레드 · 파도 블루. 그라데이션 없이 단색으로.
+"""BullsAI theme — 새 앰블럼(스틸·골드·시안) 톤에 맞춘 팔레트. 그라데이션 없이 단색으로.
 
 로고 이미지는 app/static/bullsai_logo.png 원본을 그대로 쓴다 (자르기·색 보정·합성 금지).
 """
@@ -17,9 +17,9 @@ _CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Black+Ops+One&family=IBM+Plex+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap');
 :root{
-  --bg:#161618; --panel:#1f1f22; --panel2:#26262a; --line:#323237; --line2:#44444b;
-  --steel:#d0cdc5; --steel2:#8f8a82; --ink:#ecebe8; --muted:#8f8a82;
-  --red:#b3261e; --red2:#cf3a30; --blue:#304a5a; --blue2:#4d6f84;
+  --bg:#0e1115; --panel:#171b20; --panel2:#1e242b; --line:#2a323b; --line2:#3a4550;
+  --steel:#c9d0d5; --steel2:#8b959e; --ink:#eef1f3; --muted:#8b959e;
+  --red:#22566f; --red2:#5fc2ec; --blue:#2a3138; --blue2:#46606e;
   --ok:#4f9d6c; --warn:#c8963a;
 }
 html,body,.stApp,button,input,textarea,select{font-family:"Noto Sans KR",system-ui,sans-serif !important}
@@ -52,6 +52,8 @@ a{color:var(--steel) !important} hr{border-color:var(--line) !important}
 .ba-brand img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
 .ba-name{font:400 1.55rem "Black Ops One",monospace;color:var(--steel);letter-spacing:.03em}
 .ba-name b{color:var(--red2);font-weight:inherit}
+.ba-sub{margin:.55rem 0 0;font:700 .92rem "Noto Sans KR",sans-serif;color:var(--steel);text-align:center;line-height:1.3}
+.ba-credit{margin:.3rem 0 0;font:600 .68rem "IBM Plex Mono",monospace;letter-spacing:.04em;color:var(--muted);text-align:center}
 
 /* logo banner */
 .ba-banner{display:flex;justify-content:center;align-items:center;background:#1a1a1c;border:1px solid var(--line);border-radius:12px;padding:.6rem;margin-bottom:1.4rem}
@@ -98,7 +100,7 @@ input,textarea,[data-baseweb="select"] span,[data-baseweb="select"] div{color:va
 [data-testid="stExpander"] summary p{color:var(--ink) !important;font-weight:800 !important;font-size:1.02rem !important}
 [data-testid="stExpander"] summary:hover p{color:var(--red2) !important}
 [data-testid="stAlert"],[data-testid="stAlert"] > div,[data-testid="stAlertContainer"]{border-radius:8px;background:#1b2429 !important;color:var(--ink) !important}
-[data-testid="stAlert"]{border:1px solid #304a5a;border-left:3px solid #4d6f84}
+[data-testid="stAlert"]{border:1px solid #2a3138;border-left:3px solid #46606e}
 [data-testid="stImage"] img{border-radius:8px;border:1px solid var(--line)}
 [data-testid="stDataFrame"]{border:1px solid var(--line);border-radius:8px;overflow:hidden}
 
@@ -130,7 +132,9 @@ def brand_header() -> None:
     uri = logo_data_uri()
     # 로고 안에 이름이 들어 있으므로 로고만 크게. 로고 파일이 없을 때만 글자 이름.
     inner = f'<img src="{uri}" alt="BullsAI">' if uri else '<span class="ba-name">BULLS<b>AI</b></span>'
-    st.markdown(f'<div class="ba-brand">{inner}</div>', unsafe_allow_html=True)
+    sub = '<div class="ba-sub">표적지 사진 한 장으로 찾는 사격 원인</div>'
+    credit = '<div class="ba-credit">Developed by Team 5발ZERO</div>'
+    st.markdown(f'<div class="ba-brand">{inner}{sub}{credit}</div>', unsafe_allow_html=True)
 
 
 def section(label: str) -> None:

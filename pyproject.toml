@@ -15,6 +15,9 @@ dependencies = [
   "pandas",
   "requests",
   "pillow",
+  "fastapi",
+  "python-multipart",
+  "ultralytics>=8.3",
 ]
 
 [project.optional-dependencies]

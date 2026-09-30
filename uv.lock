@@ -2982,6 +2982,7 @@ name = "shootcoach"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "fastapi" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -2990,8 +2991,11 @@ dependencies = [
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pillow" },
+    { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "ultralytics", version = "8.4.123", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11' and sys_platform == 'darwin'" },
+    { name = "ultralytics", version = "8.4.165", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' or sys_platform != 'darwin'" },
 ]
 
 [package.optional-dependencies]
@@ -3016,6 +3020,7 @@ ml = [
 
 [package.metadata]
 requires-dist = [
+    { name = "fastapi" },
     { name = "fastapi", marker = "extra == 'app'" },
     { name = "httpx", marker = "extra == 'dev'" },
     { name = "numpy" },
@@ -3025,11 +3030,13 @@ requires-dist = [
     { name = "pillow" },
     { name = "playwright", marker = "extra == 'e2e'" },
     { name = "pytest", marker = "extra == 'dev'" },
+    { name = "python-multipart" },
     { name = "python-multipart", marker = "extra == 'app'" },
     { name = "pyyaml" },
     { name = "requests" },
     { name = "streamlit", marker = "extra == 'app'" },
     { name = "streamlit-image-coordinates", marker = "extra == 'app'" },
+    { name = "ultralytics", specifier = ">=8.3" },
     { name = "ultralytics", marker = "extra == 'ml'" },
     { name = "uvicorn", marker = "extra == 'app'" },
 ]

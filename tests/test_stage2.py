@@ -1,7 +1,7 @@
 import numpy as np
 
 from shootcoach.config import load_target_spec
-from shootcoach.diagnosis.stage1 import diagnose_stage1
+from shootcoach.diagnosis.stage1 import diagnose_stage1, standalone_stage1
 from shootcoach.diagnosis.stage2 import diagnose_stage2, evaluate_signals
 from shootcoach.pose.features import arm_series, detect_view
 from shootcoach.pose.shots import motion_shot_times
@@ -79,3 +79,11 @@ def test_breathing_sway_for_vertical_string():
     seq = simulate_side_view(SHOTS, faults=Faults(breath_amp=0.04))
     s2 = diagnose_stage2(s1, seq, list(SHOTS))
     assert s2.final_cause_id == "S1"
+
+
+def test_standalone_posture_confirms_without_target():
+    """표적지 분석 없이(자세 영상만) 반동 예측 계열 신호를 확정할 수 있다."""
+    s1 = standalone_stage1()
+    seq = simulate_side_view(SHOTS, faults=Faults(dip_deg=5))
+    s2 = diagnose_stage2(s1, seq, list(SHOTS))
+    assert s2.final_cause_id in {"L1", "L2"}                  # 둘 다 '격발 직전 총구 하강' 신호로 확정됨

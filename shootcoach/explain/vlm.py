@@ -23,6 +23,7 @@ SYSTEM_KO = (
 
 
 def _facts(report: dict) -> str:
+    """표적지 분석(1단계)만의 사실. 자세 영상(2단계)은 별개 문단으로 다룬다 (explain_posture)."""
     s1 = report.get("stage1", {})
     g = report.get("group", {})
     lines = [
@@ -32,31 +33,48 @@ def _facts(report: dict) -> str:
     cands = s1.get("candidates", [])
     if cands:
         lines.append("표적지 기준 원인 후보: " + ", ".join(c["cause_ko"] for c in cands[:3]))
-    s2 = report.get("stage2")
-    if s2:
-        lines.append(f"자세 영상 판정: {s2.get('final_ko')}")
-        for v in s2.get("verdicts", [])[:3]:
-            lines.append(f"- {v['cause_ko']}: {v['status_ko']} ({'; '.join(v['evidence'])})")
     if s1.get("zero_adjust"):
         lines.append("조준기 조정: " + s1["zero_adjust"]["text_ko"])
     return "\n".join(lines)
 
 
 def template_explanation(report: dict) -> str:
+    """표적지 분석 결과만 설명하는 한 문단 (자세 영상 결과는 template_explanation_posture)."""
     s1 = report.get("stage1", {})
-    s2 = report.get("stage2")
     cands = s1.get("candidates", [])
     if not cands:
         return " ".join(s1.get("notes", [])) or "탄 수가 부족해 판단을 보류합니다."
     top = cands[0]
-    if s2 and s2.get("final_cause_id"):
-        top = next((c for c in cands if c["cause_id"] == s2["final_cause_id"]), top)
-        head = f"자세 영상에서 '{top['cause_ko']}' 신호가 확인되었습니다."
-    elif s2:
-        head = f"탄착군은 {s1.get('sector_ko')} 방향이지만 자세 영상에서 뚜렷한 원인 신호는 보이지 않아 판단을 보류합니다."
-    else:
-        head = f"탄착군이 {s1.get('shape_ko')} 형태로, '{top['cause_ko']}' 가능성이 가장 높습니다."
+    head = f"탄착군이 {s1.get('shape_ko')} 형태로, '{top['cause_ko']}' 가능성이 가장 높습니다."
     return f"{head} {top['guidance_ko']} 오늘의 훈련: {top['drill_ko']}."
+
+
+def _facts_posture(stage2: dict, stage1_candidates: list[dict]) -> str:
+    names = {c["cause_id"]: c["cause_ko"] for c in stage1_candidates}
+    lines = [f"자세 영상 판정: {stage2.get('final_ko')}",
+             f"촬영: {'측면' if stage2.get('view') == 'side' else '후방/정면'} · 격발 {len(stage2.get('shot_times') or [])}회"]
+    for v in stage2.get("verdicts", [])[:3]:
+        lines.append(f"- {names.get(v['cause_id'], v['cause_ko'])}: {v['status_ko']} ({'; '.join(v['evidence'])})")
+    for x in stage2.get("extra_findings", []):
+        lines.append(f"- 추가 관찰: {x}")
+    return "\n".join(lines)
+
+
+def _primary_posture(stage2: dict, stage1_candidates: list[dict]) -> dict | None:
+    fid = stage2.get("final_cause_id")
+    if not fid:
+        return None
+    return next((c for c in stage1_candidates if c["cause_id"] == fid), None)
+
+
+def template_explanation_posture(stage2: dict, stage1_candidates: list[dict]) -> str:
+    """자세 영상 분석 결과만 설명하는 한 문단 (표적지 분석 결과는 template_explanation)."""
+    top = _primary_posture(stage2, stage1_candidates)
+    if not top:
+        notes = " ".join(stage2.get("notes", []))
+        return f"자세 영상에서 뚜렷한 원인 신호가 확인되지 않아 판단을 보류합니다. {notes}".strip()
+    return (f"자세 영상에서 '{top['cause_ko']}' 신호가 확인되었습니다. "
+            f"{top['guidance_ko']} 오늘의 훈련: {top['drill_ko']}.")
 
 
 def _b64(img: np.ndarray, max_side: int = 448) -> str:
@@ -86,14 +104,8 @@ def vlm_available(url: str = OLLAMA_URL, model: str | None = None) -> bool:
 
 
 def _primary(report: dict) -> dict | None:
-    s1 = report.get("stage1", {})
-    cands = s1.get("candidates", [])
-    if not cands:
-        return None
-    s2 = report.get("stage2") or {}
-    if s2.get("final_cause_id"):
-        return next((c for c in cands if c["cause_id"] == s2["final_cause_id"]), cands[0])
-    return cands[0]
+    cands = report.get("stage1", {}).get("candidates", [])
+    return cands[0] if cands else None
 
 
 LEAK_MARKERS = ("분석 결과:", "사수에게 할 설명", "3문장 이내", "새로 만들지 마세요", "가장 유력한 원인(반드시")
@@ -113,20 +125,43 @@ def mentions_cause(text: str, cause_ko: str) -> bool:
 
 def validate_explanation(text: str, report: dict) -> str | None:
     """Reject outputs that leak the prompt or ignore the rule engine's primary cause."""
+    return _validate(text, _primary(report))
+
+
+def validate_explanation_posture(text: str, stage2: dict, stage1_candidates: list[dict]) -> str | None:
+    return _validate(text, _primary_posture(stage2, stage1_candidates))
+
+
+def _validate(text: str, primary: dict | None) -> str | None:
     if not text or len(text) < 20:
         return "too short"
     if any(m in text for m in LEAK_MARKERS):
         return "prompt leak"
-    p = _primary(report)
-    if p and not mentions_cause(text, p["cause_ko"]):
-        return f"primary cause '{p['cause_ko']}' not mentioned"
+    if primary and not mentions_cause(text, primary["cause_ko"]):
+        return f"primary cause '{primary['cause_ko']}' not mentioned"
     return None
+
+
+def _chat(user: str, images: list[np.ndarray] | None, model: str, url: str, timeout: float, max_side: int) -> str:
+    msg = {"role": "user", "content": user}
+    if images:
+        msg["images"] = [_b64(im, max_side) for im in images[:3]]
+    body = {"model": model, "stream": False, "think": False,
+            "messages": [{"role": "system", "content": SYSTEM_KO}, msg],
+            "options": {"temperature": 0.1, "num_predict": 200}}
+    r = requests.post(f"{url}/api/chat", data=json.dumps(body), timeout=timeout)
+    if r.status_code == 400 and "think" in r.text:      # models without a thinking switch
+        body.pop("think")
+        r = requests.post(f"{url}/api/chat", data=json.dumps(body), timeout=timeout)
+    r.raise_for_status()
+    return r.json().get("message", {}).get("content", "").strip()
 
 
 def vlm_explanation(report: dict, images: list[np.ndarray] | None = None, model: str | None = None,
                     url: str = OLLAMA_URL, timeout: float = 90.0, max_side: int = 448) -> dict:
-    """Returns {"text", "source": "vlm"|"template", "latency_s", "error"?}.
+    """표적지 분석 결과만 설명. 자세 영상 결과는 vlm_explanation_posture.
 
+    Returns {"text", "source": "vlm"|"template", "latency_s", "error"?}.
     The model only phrases the rule engine's result. Output is validated and replaced by the
     template sentence if it leaks the prompt or drops the primary cause.
     """
@@ -138,22 +173,33 @@ def vlm_explanation(report: dict, images: list[np.ndarray] | None = None, model:
     user = f"분석 결과:\n{_facts(report)}\n{focus}\n\n위 내용을 사수에게 2~3문장으로 설명하고, 마지막 문장은 '오늘의 훈련:'으로 시작하세요."
     t0 = time.perf_counter()
     try:
-        msg = {"role": "user", "content": user}
-        if images:
-            msg["images"] = [_b64(im, max_side) for im in images[:3]]
-        body = {"model": model, "stream": False, "think": False,
-                "messages": [{"role": "system", "content": SYSTEM_KO}, msg],
-                "options": {"temperature": 0.1, "num_predict": 200}}
-        r = requests.post(f"{url}/api/chat", data=json.dumps(body), timeout=timeout)
-        if r.status_code == 400 and "think" in r.text:      # models without a thinking switch
-            body.pop("think")
-            r = requests.post(f"{url}/api/chat", data=json.dumps(body), timeout=timeout)
-        r.raise_for_status()
-        text = r.json().get("message", {}).get("content", "").strip()
+        text = _chat(user, images, model, url, timeout, max_side)
         problem = validate_explanation(text, report)
         if problem:
             raise ValueError(f"rejected: {problem} :: {text[:80]}")
         return {"text": text, "source": "vlm", "model": model, "latency_s": round(time.perf_counter() - t0, 2)}
     except Exception as e:  # noqa: BLE001 — any failure falls back to the template
         return {"text": template_explanation(report), "source": "template", "model": model,
+                "latency_s": round(time.perf_counter() - t0, 2), "error": str(e)[:200]}
+
+
+def vlm_explanation_posture(stage2: dict, stage1_candidates: list[dict], images: list[np.ndarray] | None = None,
+                            model: str | None = None, url: str = OLLAMA_URL, timeout: float = 90.0,
+                            max_side: int = 448) -> dict:
+    """자세 영상 분석 결과만 설명. 표적지 분석 결과는 vlm_explanation."""
+    model = model or pick_model(url) or DEFAULT_MODEL
+    if "vl" not in model:
+        images = None
+    p = _primary_posture(stage2, stage1_candidates)
+    focus = f"가장 유력한 원인(반드시 이 원인을 중심으로 설명): {p['cause_ko']}\n교정 방법: {p['guidance_ko']}\n훈련: {p['drill_ko']}" if p else ""
+    user = f"분석 결과:\n{_facts_posture(stage2, stage1_candidates)}\n{focus}\n\n위 내용을 사수에게 2~3문장으로 설명하고, 마지막 문장은 '오늘의 훈련:'으로 시작하세요."
+    t0 = time.perf_counter()
+    try:
+        text = _chat(user, images, model, url, timeout, max_side)
+        problem = validate_explanation_posture(text, stage2, stage1_candidates)
+        if problem:
+            raise ValueError(f"rejected: {problem} :: {text[:80]}")
+        return {"text": text, "source": "vlm", "model": model, "latency_s": round(time.perf_counter() - t0, 2)}
+    except Exception as e:  # noqa: BLE001 — any failure falls back to the template
+        return {"text": template_explanation_posture(stage2, stage1_candidates), "source": "template", "model": model,
                 "latency_s": round(time.perf_counter() - t0, 2), "error": str(e)[:200]}

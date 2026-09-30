@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from shootcoach.diagnosis.rules import load_causes
-from shootcoach.diagnosis.stage1 import ShooterProfile, diagnose_stage1, load_kb
+from shootcoach.diagnosis.stage1 import ShooterProfile, diagnose_stage1, load_kb, standalone_stage1
 from shootcoach.pipeline import default_spec
 from shootcoach.target.detect import Hole
 from shootcoach.target.scoring import group_stats, score_hole
@@ -102,3 +102,18 @@ def test_candidates_carry_checklist(cid):
     _, res = top(*offs[cid], k=5)
     c = next(c for c in res.candidates if c.cause_id == cid)
     assert c.checklist and c.guidance_ko
+
+
+def test_standalone_stage1_needs_no_target():
+    """자세 영상만 있을 때: 표적지 증거 없이도 자세로 확인 가능한 원인 후보를 낸다."""
+    res = standalone_stage1()
+    assert res.candidates
+    assert all(c.posture_signals for c in res.candidates)     # signals 없는 원인(LB1/LB4/RB1/Z1 등)은 제외
+    assert not any(c.cause_id == "Z1" for c in res.candidates)  # 영점 오류는 자세로 확인할 수 없다
+    assert "표적지" in " ".join(res.notes)
+
+
+def test_standalone_stage1_mirrors_handedness():
+    left = standalone_stage1(handedness="left")
+    right = standalone_stage1(handedness="right")
+    assert {c.cause_id for c in left.candidates} == {c.cause_id for c in right.candidates}

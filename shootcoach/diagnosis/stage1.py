@@ -190,3 +190,22 @@ def diagnose_stage1(stats: GroupStats, spec: TargetSpec, handedness: str = "righ
             sources=[SOURCE], checklist=list(c.get("check") or []), axis=c["axis"]))
     return Stage1Result(stats.shape, stats.shape_ko, stats.sector, CLOCK_LABELS_KO[stats.sector], handedness,
                         cands, zero, notes, {k: round(v, 2) for k, v in comp.items()})
+
+
+def standalone_stage1(handedness: str = "right", top_k: int = 5) -> Stage1Result:
+    """표적지 분석 없이 자세 영상만 볼 때 쓰는 원인 후보.
+
+    탄착군 증거가 없으니 축 가중합 대신, 자세 영상으로 확인 가능한 원인(signals 있는 것)만
+    교범 기본 확률(prior) 순으로 후보에 올린다. 실제 확정은 diagnose_stage2 가 자세 신호로 한다.
+    """
+    kb = load_kb()
+    causes = [(cid, c) for cid, c in kb["causes"].items() if c.get("signals")]
+    causes.sort(key=lambda kv: -kv[1]["prior"])
+    cands = [Candidate(
+        cause_id=cid, cause_ko=c["name"], score=round(c["prior"], 2), guidance_ko=c["desc"],
+        drill_ko=c.get("drill", ""), posture_signals=list(c["signals"]), observable_note="",
+        rule_ids=[cid], sources=[SOURCE], checklist=list(c.get("check") or []), axis=c["axis"])
+        for cid, c in causes[:top_k]]
+    notes = ["표적지 분석 없이 자세 영상만 분석했습니다. 아래 원인 후보는 교범 기준 사전 확률이며, "
+             "실제 탄착 경향과는 무관합니다. 표적지도 함께 분석하면 후보가 좁혀집니다."]
+    return Stage1Result("standalone", "자세 영상 단독 분석", 0, "", handedness, cands, None, notes, {})

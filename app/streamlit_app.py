@@ -24,12 +24,18 @@ from shootcoach.device import model_path  # noqa: E402
 from shootcoach.diagnosis.calibration import ShooterProfile as CalProfile  # noqa: E402
 from shootcoach.diagnosis.calibration import apply_profile  # noqa: E402
 from shootcoach.diagnosis.rules import load_causes  # noqa: E402
-from shootcoach.diagnosis.stage1 import Candidate, ShooterProfile, Stage1Result, ZeroAdjust, diagnose_stage1  # noqa: E402
+from shootcoach.diagnosis.stage1 import (  # noqa: E402
+    Candidate, ShooterProfile, Stage1Result, ZeroAdjust, diagnose_stage1, standalone_stage1,
+)
 from shootcoach.diagnosis.stage2 import diagnose_stage2  # noqa: E402
-from shootcoach.explain.vlm import template_explanation, vlm_available, vlm_explanation  # noqa: E402
-from shootcoach.pipeline import analyze_posture, analyze_target, count_holes, default_spec, get_photo_detector, to_json  # noqa: E402
+from shootcoach.explain.vlm import (  # noqa: E402
+    template_explanation, template_explanation_posture, vlm_available, vlm_explanation, vlm_explanation_posture,
+)
+from shootcoach.pipeline import analyze_target, count_holes, default_spec, get_photo_detector, to_json  # noqa: E402
 from shootcoach.pose.features import arm_series  # noqa: E402
+from shootcoach.pose.keypoints import extract_keypoints  # noqa: E402
 from shootcoach.pose.render import key_frames  # noqa: E402
+from shootcoach.pose.shots import audio_shot_times  # noqa: E402
 from shootcoach.pose.simulate import Faults, simulate_side_view  # noqa: E402
 from shootcoach.target.detect import Hole  # noqa: E402
 from shootcoach.target.locate import TargetNotFound  # noqa: E402
@@ -207,63 +213,84 @@ with tab1:
 
 with tab2:
     rep = st.session_state.get("report")
+    stage1_obj = stage1_from_dict(rep["stage1"]) if rep else standalone_stage1(hand)
     if not rep:
-        st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
-    else:
-        i1, i2, i3 = st.columns([5, 4, 1.4], vertical_alignment="bottom")
-        vid = i1.file_uploader("자세 영상", type=["mp4", "mov", "m4v"])
-        sim = i2.selectbox("또는 데모 영상",
-                           ["(선택 안 함)", "정상 자세", "격발 직전 총구 하강", "격발 직전 총구 들림 + 어깨 긴장",
-                            "격발 직후 팔 내림", "조준 중 호흡 흔들림"])
-        if i3.button("분석", type="primary", width="stretch", key="pose_go"):
-            if vid is not None:
-                with tempfile.NamedTemporaryFile(suffix=Path(vid.name).suffix, delete=False) as f:
-                    f.write(vid.read())
-                with st.spinner("관절 추출 중…"):
-                    analyze_posture(rep, f.name, hand, pose_model=model_path(POSE_MODELS[pose_kind]))
-                st.session_state["stage2_video"] = f.name
-            elif sim != "(선택 안 함)":
-                faults = {"정상 자세": Faults(), "격발 직전 총구 하강": Faults(dip_deg=4),
-                          "격발 직전 총구 들림 + 어깨 긴장": Faults(heel_deg=4, shrug=0.02),
-                          "격발 직후 팔 내림": Faults(early_drop=0.12), "조준 중 호흡 흔들림": Faults(breath_amp=0.03)}[sim]
-                seq = simulate_side_view((2.5, 5.0, 7.5), faults=faults)
-                s2 = diagnose_stage2(stage1_from_dict(rep["stage1"]), seq, None, hand)
-                rep["stage2"] = s2.as_dict() | {"shot_source": "motion (synthetic)"}
-                st.session_state["stage2_seq"] = seq
-        s2 = rep.get("stage2")
-        if s2:
-            seq = st.session_state.get("stage2_seq")
-            left, right = st.columns([6, 5], gap="large")
-            with left:
-                st.subheader(s2["final_ko"])
-                st.caption(f"{'측면' if s2['view'] == 'side' else '후방/정면'} 촬영 · 격발 {len(s2['shot_times'])}회")
-                st.dataframe(pd.DataFrame([{"원인 후보": v["cause_ko"], "판정": v["status_ko"], "신뢰도": v["confidence"],
-                                            "근거": " / ".join(v["evidence"])} for v in s2["verdicts"]]),
-                             hide_index=True, width="stretch")
-                for x in s2.get("extra_findings", []):
-                    st.warning("추가 관찰: " + x)
-                if seq is not None:
-                    _, pitch, _ = arm_series(seq, hand)
-                    st.line_chart(pd.DataFrame({"팔뚝 각도(°)": pitch}, index=np.round(seq.t, 2)), height=200, color="#5fc2ec")
-            with right:
-                if seq is not None and s2["shot_times"]:
-                    frames = key_frames(seq, s2["shot_times"][0])
-                    cols = st.columns(3)
-                    for col, im, cap in zip(cols, frames, ["0.3초 전", "격발 직전", "0.5초 후"]):
-                        col.image(cv2.cvtColor(im, cv2.COLOR_BGR2RGB), caption=cap, width="stretch")
-                for n in s2.get("notes", []):
-                    st.caption(n)
+        st.caption("표적지 분석 없이도 자세 영상만 바로 분석할 수 있습니다. 표적지도 함께 분석하면 원인 후보가 더 좁혀집니다.")
+    i1, i2, i3 = st.columns([5, 4, 1.4], vertical_alignment="bottom")
+    vid = i1.file_uploader("자세 영상", type=["mp4", "mov", "m4v"])
+    sim = i2.selectbox("또는 데모 영상",
+                       ["(선택 안 함)", "정상 자세", "격발 직전 총구 하강", "격발 직전 총구 들림 + 어깨 긴장",
+                        "격발 직후 팔 내림", "조준 중 호흡 흔들림"])
+    if i3.button("분석", type="primary", width="stretch", key="pose_go"):
+        if vid is not None:
+            with tempfile.NamedTemporaryFile(suffix=Path(vid.name).suffix, delete=False) as f:
+                f.write(vid.read())
+            with st.spinner("관절 추출 중…"):
+                seq = extract_keypoints(f.name, model_path(POSE_MODELS[pose_kind]))
+                shots = audio_shot_times(f.name)
+            s2 = diagnose_stage2(stage1_obj, seq, shots or None, hand)
+            st.session_state["stage2"] = s2.as_dict() | {"shot_source": "audio" if shots else "motion"}
+            st.session_state["stage2_candidates"] = stage1_obj.as_dict()["candidates"]
+            st.session_state["stage2_seq"] = seq
+        elif sim != "(선택 안 함)":
+            faults = {"정상 자세": Faults(), "격발 직전 총구 하강": Faults(dip_deg=4),
+                      "격발 직전 총구 들림 + 어깨 긴장": Faults(heel_deg=4, shrug=0.02),
+                      "격발 직후 팔 내림": Faults(early_drop=0.12), "조준 중 호흡 흔들림": Faults(breath_amp=0.03)}[sim]
+            seq = simulate_side_view((2.5, 5.0, 7.5), faults=faults)
+            s2 = diagnose_stage2(stage1_obj, seq, None, hand)
+            st.session_state["stage2"] = s2.as_dict() | {"shot_source": "motion (synthetic)"}
+            st.session_state["stage2_candidates"] = stage1_obj.as_dict()["candidates"]
+            st.session_state["stage2_seq"] = seq
+    s2 = st.session_state.get("stage2")
+    if s2:
+        seq = st.session_state.get("stage2_seq")
+        left, right = st.columns([6, 5], gap="large")
+        with left:
+            st.subheader(s2["final_ko"])
+            st.caption(f"{'측면' if s2['view'] == 'side' else '후방/정면'} 촬영 · 격발 {len(s2['shot_times'])}회")
+            st.dataframe(pd.DataFrame([{"원인 후보": v["cause_ko"], "판정": v["status_ko"], "신뢰도": v["confidence"],
+                                        "근거": " / ".join(v["evidence"])} for v in s2["verdicts"]]),
+                         hide_index=True, width="stretch")
+            for x in s2.get("extra_findings", []):
+                st.warning("추가 관찰: " + x)
+            if seq is not None:
+                _, pitch, _ = arm_series(seq, hand)
+                st.line_chart(pd.DataFrame({"팔뚝 각도(°)": pitch}, index=np.round(seq.t, 2)), height=200, color="#5fc2ec")
+        with right:
+            if seq is not None and s2["shot_times"]:
+                frames = key_frames(seq, s2["shot_times"][0])
+                cols = st.columns(3)
+                for col, im, cap in zip(cols, frames, ["0.3초 전", "격발 직전", "0.5초 후"]):
+                    col.image(cv2.cvtColor(im, cv2.COLOR_BGR2RGB), caption=cap, width="stretch")
+            for n in s2.get("notes", []):
+                st.caption(n)
 
 with tab3:
     rep = st.session_state.get("report")
-    if not rep:
-        st.info("먼저 표적지 분석 탭에서 분석을 실행하세요.")
+    s2 = st.session_state.get("stage2")
+    s2_cands = st.session_state.get("stage2_candidates")
+    if not rep and not s2:
+        st.info("먼저 표적지 분석이나 자세 영상 분석을 실행하세요.")
     elif st.button("설명 문장 만들기", type="primary"):
-        if use_vlm:
-            with st.spinner("로컬 AI 생성 중…"):
-                ex = vlm_explanation(rep, [st.session_state["overlay"]])
-        else:
-            ex = {"text": template_explanation(rep), "source": "template", "latency_s": 0}
-        st.write(ex["text"])
-        st.caption(f"출처: {'로컬 AI ' + ex.get('model', '') if ex['source'] == 'vlm' else '기본 문장'} · {ex['latency_s']}초"
-                   + (f" · 오류: {ex['error']}" if ex.get("error") else ""))
+        if rep:
+            if use_vlm:
+                with st.spinner("로컬 AI 생성 중…"):
+                    ex1 = vlm_explanation(rep, [st.session_state["overlay"]])
+            else:
+                ex1 = {"text": template_explanation(rep), "source": "template", "latency_s": 0}
+            st.markdown("**표적지 분석**")
+            st.write(ex1["text"])
+            st.caption(f"출처: {'로컬 AI ' + ex1.get('model', '') if ex1['source'] == 'vlm' else '기본 문장'} · {ex1['latency_s']}초"
+                   + (f" · 오류: {ex1['error']}" if ex1.get("error") else ""))
+        if s2:
+            if use_vlm:
+                seq = st.session_state.get("stage2_seq")
+                imgs = key_frames(seq, s2["shot_times"][0]) if seq is not None and s2["shot_times"] else None
+                with st.spinner("로컬 AI 생성 중…"):
+                    ex2 = vlm_explanation_posture(s2, s2_cands, imgs)
+            else:
+                ex2 = {"text": template_explanation_posture(s2, s2_cands), "source": "template", "latency_s": 0}
+            st.markdown("**자세 영상 분석**")
+            st.write(ex2["text"])
+            st.caption(f"출처: {'로컬 AI ' + ex2.get('model', '') if ex2['source'] == 'vlm' else '기본 문장'} · {ex2['latency_s']}초"
+                   + (f" · 오류: {ex2['error']}" if ex2.get("error") else ""))

@@ -133,9 +133,12 @@ def analyze_target(image: np.ndarray | str | Path, spec: TargetSpec | None = Non
     return TargetAnalysis(report, rect, draw_overlay(rect, holes, report, spec), holes)
 
 
-def analyze_posture(report: dict, video_path: str | Path, handedness: str = "right", view: str | None = None,
-                    pose_model: str | None = None) -> dict:
-    from shootcoach.diagnosis.stage1 import Candidate, Stage1Result, ZeroAdjust
+def diagnose_posture(stage1, video_path: str | Path, handedness: str = "right", view: str | None = None,
+                     pose_model: str | None = None) -> dict:
+    """자세 영상 → 2단계 판정 dict. stage1 후보 목록(표적지 분석 결과 또는 standalone_stage1())에 대해 확정/배제한다.
+
+    표적지 분석과 별개로 쓸 수 있다: 자세 영상만 있을 때는 stage1=standalone_stage1(handedness) 를 넘긴다.
+    """
     from shootcoach.diagnosis.stage2 import diagnose_stage2
     from shootcoach.pose.keypoints import extract_keypoints
     from shootcoach.pose.shots import audio_shot_times
@@ -143,15 +146,23 @@ def analyze_posture(report: dict, video_path: str | Path, handedness: str = "rig
     t0 = time.perf_counter()
     seq = extract_keypoints(video_path, pose_model)
     shots = audio_shot_times(video_path)
+    s2 = diagnose_stage2(stage1, seq, shots or None, handedness, view)
+    out = s2.as_dict()
+    out["shot_source"] = "audio" if shots else "motion"
+    out["latency_s"] = round(time.perf_counter() - t0, 2)
+    return out
+
+
+def analyze_posture(report: dict, video_path: str | Path, handedness: str = "right", view: str | None = None,
+                    pose_model: str | None = None) -> dict:
+    """표적지 분석 결과(report)에 자세 영상 판정을 덧붙인다 (CLI용). 앱은 diagnose_posture 를 직접 쓴다."""
+    from shootcoach.diagnosis.stage1 import Candidate, Stage1Result, ZeroAdjust
+
     d = report["stage1"]
     s1 = Stage1Result(d["shape"], d["shape_ko"], d["sector"], d["sector_ko"], d["handedness"],
                       [Candidate(**c) for c in d["candidates"]],
                       ZeroAdjust(**d["zero_adjust"]) if d["zero_adjust"] else None, d["notes"])
-    s2 = diagnose_stage2(s1, seq, shots or None, handedness, view)
-    out = s2.as_dict()
-    out["shot_source"] = "audio" if shots else "motion"
-    out["latency_s"] = round(time.perf_counter() - t0, 2)
-    report["stage2"] = out
+    report["stage2"] = diagnose_posture(s1, video_path, handedness, view, pose_model)
     return report
 
 

@@ -17,6 +17,7 @@ import numpy as np
 from shootcoach.config import REPO_ROOT
 
 PHOTO_WEIGHTS = REPO_ROOT / "models" / "hole_detector_photo.pt"
+PHOTO_ONNX_WEIGHTS = REPO_ROOT / "models" / "hole_detector_photo.onnx"
 
 
 @dataclass
@@ -86,6 +87,65 @@ class PhotoHoleDetector:
                 log["split"] = n_split
         log["found"] = len(picked)
         return picked, log
+
+
+class OpenCVDNNHoleDetector(PhotoHoleDetector):
+    """YOLO11 detector backed by OpenCV DNN for lightweight CPU servers.
+
+    The ONNX model has one class and emits ``xywh + confidence`` predictions.
+    Avoiding the Ultralytics/PyTorch runtime keeps the Vercel function below
+    its deployment size limit while preserving the detector interface.
+    """
+
+    def __init__(self, weights: str | Path = PHOTO_ONNX_WEIGHTS, imgsz: int = 960, device=None, augment: bool = False):
+        self.model = cv2.dnn.readNetFromONNX(str(weights))
+        self.imgsz = imgsz
+        self.device = device
+        self.augment = augment
+
+    def raw(self, image: np.ndarray, conf_floor: float = 0.05) -> list[PxHole]:
+        h, w = image.shape[:2]
+        scale = min(self.imgsz / w, self.imgsz / h)
+        nw, nh = int(round(w * scale)), int(round(h * scale))
+        resized = cv2.resize(image, (nw, nh), interpolation=cv2.INTER_LINEAR)
+        left = (self.imgsz - nw) // 2
+        top = (self.imgsz - nh) // 2
+        padded = cv2.copyMakeBorder(
+            resized,
+            top,
+            self.imgsz - nh - top,
+            left,
+            self.imgsz - nw - left,
+            cv2.BORDER_CONSTANT,
+            value=(114, 114, 114),
+        )
+        blob = cv2.dnn.blobFromImage(padded, 1 / 255.0, (self.imgsz, self.imgsz), swapRB=True, crop=False)
+        self.model.setInput(blob)
+        pred = np.asarray(self.model.forward())
+        if pred.ndim == 3:
+            pred = pred[0]
+        if pred.shape[0] < pred.shape[1]:
+            pred = pred.T
+
+        scores = pred[:, 4]
+        keep = scores >= conf_floor
+        pred, scores = pred[keep], scores[keep]
+        if not len(pred):
+            return []
+
+        boxes = []
+        for x, y, bw, bh in pred[:, :4]:
+            x1 = (float(x - bw / 2) - left) / scale
+            y1 = (float(y - bh / 2) - top) / scale
+            boxes.append([x1, y1, float(bw) / scale, float(bh) / scale])
+        indices = cv2.dnn.NMSBoxes(boxes, scores.tolist(), conf_floor, 0.6, top_k=300)
+        out = []
+        for i in np.asarray(indices).reshape(-1):
+            x, y, bw, bh = boxes[int(i)]
+            cx = float(np.clip(x + bw / 2, 0, w - 1))
+            cy = float(np.clip(y + bh / 2, 0, h - 1))
+            out.append(PxHole(cx, cy, (bw + bh) / 4, float(scores[int(i)])))
+        return out
 
 
 def split_merged(image: np.ndarray, holes: list[PxHole], expected: int) -> tuple[list[PxHole], int]:

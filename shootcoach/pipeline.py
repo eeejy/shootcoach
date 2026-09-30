@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,7 +27,12 @@ def default_spec() -> TargetSpec:
 
 def get_photo_detector():
     """The photo-trained hole detector (models/hole_detector_photo.pt)."""
-    from shootcoach.target.photo import PHOTO_WEIGHTS, PhotoHoleDetector
+    from shootcoach.target.photo import PHOTO_ONNX_WEIGHTS, PHOTO_WEIGHTS, OpenCVDNNHoleDetector, PhotoHoleDetector
+
+    if os.environ.get("VERCEL") or os.environ.get("SHOOTCOACH_ONNX"):
+        if not PHOTO_ONNX_WEIGHTS.exists():
+            raise FileNotFoundError(f"ONNX 탄공 모델이 없습니다: {PHOTO_ONNX_WEIGHTS}")
+        return OpenCVDNNHoleDetector()
 
     if not PHOTO_WEIGHTS.exists():
         raise FileNotFoundError(f"탄공 모델이 없습니다: {PHOTO_WEIGHTS} (scripts/setup.sh 로 설치)")

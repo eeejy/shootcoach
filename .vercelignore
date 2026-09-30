@@ -17,6 +17,8 @@ logs/
 research/
 certs/
 desktop/
+models/*.pt
+samples/
 
 # Development-only files.
 tests/

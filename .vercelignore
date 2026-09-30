@@ -1,0 +1,23 @@
+.git/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+.env
+.env.local
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Local training data and generated artifacts are not needed at runtime.
+data/
+runs/
+out/
+logs/
+research/
+certs/
+desktop/
+
+# Development-only files.
+tests/
+scripts/

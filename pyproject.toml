@@ -28,3 +28,6 @@ include = ["shootcoach*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.vercel]
+entrypoint = "app.capture_server:app"

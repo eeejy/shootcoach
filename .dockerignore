@@ -1,0 +1,33 @@
+# 빌드 컨텍스트 경량화 — 런타임에 불필요한 것만 제외.
+# 주의: models/, samples/, configs/, rules/, app/, shootcoach/ 는 앱 실행에 필요하므로 제외하지 않는다.
+
+.git
+.gitignore
+.wrks
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# 학습/평가 산출물 (런타임 불필요, 용량 큼)
+data/
+docs/
+tests/
+
+# 개발용 인증서·스크립트 산출물
+*.pem
+*.key
+*.crt
+
+# 락파일은 이미지 빌드에 requirements.txt를 쓰므로 제외
+uv.lock
+
+# 에디터
+.vscode
+.idea
+.DS_Store
